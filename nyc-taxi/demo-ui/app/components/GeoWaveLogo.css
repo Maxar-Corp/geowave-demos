@@ -1,0 +1,11 @@
+.root {
+  z-index: 99;
+  position: absolute;
+  bottom: 5px;
+  left: 5px;
+  width: 30vw;
+}
+
+.root a {
+  cursor: pointer;
+}
