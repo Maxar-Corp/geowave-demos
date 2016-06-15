@@ -1,6 +1,6 @@
 # GeoWave Demo UI
 
-![screenshot](/screenshot.png)
+![screenshot](nyc-taxi/demo-ui/screenshot.png)
 
 Simple demonstration app showing off what GeoWave can do.
 
