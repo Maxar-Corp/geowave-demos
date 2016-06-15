@@ -1,0 +1,98 @@
+.root {
+  z-index: 99;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
+}
+
+.map {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: transparent;
+}
+
+.mask {
+  z-index: 9000;
+  background-color: hsla(200, 100%, 33%, 0.5);
+  color: white;
+}
+
+.flightPath {
+  stroke: #ff6e34;
+  stroke-width: 2px;
+  stroke-dasharray: 10 10;
+}
+
+.tooltipPane {
+  display: none;
+}
+
+.tooltipPane.isMousedOver {
+  display: block;
+}
+
+.tooltip {
+  position: absolute;
+  background-color: rgba(255, 255, 255, 0.81);
+  color: black;
+  padding: 1em;
+  white-space: nowrap;
+  border-radius: 3px;
+  box-shadow: 0 0 0 1px rgba(0,0,0,.1), 0 3px 3px rgba(0,0,0,.2);
+  font-size: 16px;
+}
+
+.borough {
+  fill-opacity: .2;
+  stroke-width: 0;
+  stroke-dasharray: 6px 6px;
+  stroke-opacity: 1;
+  transition: .2s cubic-bezier(0.5, 1.2, 0.8, 1.4);
+  transition-property: fill-opacity;
+}
+
+.borough:hover {
+  fill-opacity: .4;
+  stroke-width: 1;
+  animation: marching-ants 1s forwards linear infinite;
+}
+
+@keyframes marching-ants {
+  to { stroke-dashoffset: 12px; }
+}
+
+.queens {
+  composes: borough;
+  fill: green;
+  stroke: green;
+}
+
+.statenIsland {
+  composes: borough;
+  fill: magenta;
+  stroke: magenta;
+}
+
+.brooklyn {
+  composes: borough;
+  fill: blue;
+  stroke: blue;
+}
+
+.bronx {
+  composes: borough;
+  fill: orange;
+  stroke: orange;
+}
+
+.manhattan {
+  composes: borough;
+  fill: red;
+  stroke: red;
+}

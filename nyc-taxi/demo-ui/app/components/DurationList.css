@@ -1,0 +1,14 @@
+.root {
+  composes: stackingOrder from '../styles/common/overlays.css';
+  list-style: none;
+  position: absolute;
+  bottom: 50px;
+  right: 40px;
+  width: 400px;
+  margin: 0;
+  padding: 0;
+}
+
+.root li + li {
+  margin-top: 5px;
+}

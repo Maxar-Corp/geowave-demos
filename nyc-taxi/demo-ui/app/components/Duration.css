@@ -1,0 +1,38 @@
+.root {
+  composes: standard from '../styles/common/overlays.css';
+}
+
+.duration {
+  flex: 1;
+  align-items: center;
+  padding-right: .5em;
+  background-image: linear-gradient(to bottom, hsl(182, 68%, 54%), hsl(210, 75%, 59%));
+  border-bottom: 1px solid rgba(0,0,0, .2);
+  font-size: 36px;
+  font-weight: 100;
+  text-shadow: 0 3px rgba(0,0,0,.2);
+  text-align: right;
+  color: white;
+}
+
+.timestamp {
+  width: 90px;
+  margin-left: 10px;
+  font-size: 18px;
+  font-weight: 500;
+  color: hsl(192, 91%, 36%);
+}
+
+.clock {
+  height: 1em;
+  margin-right: .25em;
+  vertical-align: middle;
+  fill: hsl(192, 91%, 36%);
+}
+
+.label {
+  font-size: .8em;
+  display: block;
+  line-height: 1em;
+  margin-top: .5em;
+}

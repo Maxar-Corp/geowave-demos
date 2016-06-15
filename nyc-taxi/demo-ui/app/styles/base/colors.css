@@ -1,0 +1,10 @@
+@viewport { width: device-width; }
+
+html {
+  background-color: #849fb7;
+  color: #555;
+}
+
+a {
+  color: lime;
+}
