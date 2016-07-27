@@ -90,6 +90,10 @@ public class NYCTLCService
 		allParams.addField(Field.TIP_AMOUNT);
 		allParams.addField(Field.TOLLS_AMOUNT);
 		allParams.addField(Field.TOTAL_AMOUNT);
+		allParams.addField(Field.VENDOR_ID);
+		allParams.addField(Field.RATE_CODE_ID);
+		allParams.addField(Field.PAYMENT_TYPE);
+		allParams.addField(Field.CAB_TYPE);
 		init(
 				ServiceUtils.getProperty(
 						props,

@@ -120,7 +120,7 @@ public class NYCTLCStatistics implements
 		numEntries = buffer.getLong();
 		statsList.clear();
 		Field[] fields = Field.values();
-		for (int i = 0; i < statsSize - 1; i++) {
+		for (int i = 0; i < statsSize; i++) {
 			int ordinal = buffer.getInt();
 			int statLen = buffer.getInt();
 			BaseStat stat = fields[ordinal].getStatBuilder().build();
@@ -301,7 +301,10 @@ public class NYCTLCStatistics implements
 		@Override
 		public void updateStat(
 				Integer bin ) {
-			counts[bin - firstBin]++;
+			if (bin != null && 0 <= (bin - firstBin) && (bin - firstBin) < counts.length) {
+				// check to make sure that value is in range
+				counts[bin - firstBin]++;
+			}
 		}
 
 		@Override

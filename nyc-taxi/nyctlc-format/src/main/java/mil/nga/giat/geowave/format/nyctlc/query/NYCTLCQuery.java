@@ -67,11 +67,14 @@ public class NYCTLCQuery extends
 	@Override
 	protected DistributableQueryFilter createQueryFilter(
 			final MultiDimensionalNumericData constraints,
-			final NumericDimensionField<?>[] dimensionFields ) {
+			final NumericDimensionField<?>[] dimensionFields,
+			final NumericDimensionField<?>[] UCdimensionFields ) {
 		final List<NumericData> pickupConstraints = new ArrayList<NumericData>();
 		final List<NumericData> dropoffConstraints = new ArrayList<NumericData>();
 		final List<NumericDimensionField> pickupDimFields = new ArrayList<NumericDimensionField>();
 		final List<NumericDimensionField> dropoffDimFields = new ArrayList<NumericDimensionField>();
+		final List<NumericDimensionField> UCpickupDimFields = new ArrayList<NumericDimensionField>();
+		final List<NumericDimensionField> UCdropoffDimFields = new ArrayList<NumericDimensionField>();
 
 		for (int dim = 0; dim < constraints.getDimensionCount() && dim < dimensionFields.length; dim++) {
 			if (!dimensionFields[dim].getFieldId().equals(
@@ -86,6 +89,17 @@ public class NYCTLCQuery extends
 			}
 		}
 
+		for (int dim = 0; dim < UCdimensionFields.length; dim++) {
+			if (!UCdimensionFields[dim].getFieldId().equals(
+					NYCTLCDimensionalityTypeProvider.DROPOFF_GEOMETRY_FIELD_ID)) {
+				UCpickupDimFields.add(UCdimensionFields[dim]);
+			}
+			else if (!UCdimensionFields[dim].getFieldId().equals(
+					NYCTLCDimensionalityTypeProvider.PICKUP_GEOMETRY_FIELD_ID)) {
+				UCdropoffDimFields.add(UCdimensionFields[dim]);
+			}
+		}
+
 		return new DistributableFilterList(
 				true,
 				Arrays.asList(new DistributableQueryFilter[] {
@@ -93,12 +107,14 @@ public class NYCTLCQuery extends
 							new BasicNumericDataset(
 									pickupConstraints.toArray(new NumericData[pickupConstraints.size()])),
 							pickupDimFields.toArray(new NumericDimensionField[pickupDimFields.size()]),
+							UCpickupDimFields.toArray(new NumericDimensionField[UCpickupDimFields.size()]),
 							pickupGeometry,
 							compareOp),
 					new SpatialQueryFilter(
 							new BasicNumericDataset(
 									dropoffConstraints.toArray(new NumericData[dropoffConstraints.size()])),
 							dropoffDimFields.toArray(new NumericDimensionField[dropoffDimFields.size()]),
+							UCdropoffDimFields.toArray(new NumericDimensionField[UCdropoffDimFields.size()]),
 							dropoffGeometry,
 							compareOp)
 				}));
