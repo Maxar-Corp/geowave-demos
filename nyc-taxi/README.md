@@ -59,7 +59,7 @@ $ geowave config addindex -t nyctlc-sst nycindex
 Finally, run the ingest call on the data with:
 ```
 $ geowave ingest localtogw ./ingest nycstore nycindex \ 
-	  -f geotools-nyctlc
+	  -f nyctlc
 ```
 
 At this point the data should be ingested, and the demo should be ready to use.

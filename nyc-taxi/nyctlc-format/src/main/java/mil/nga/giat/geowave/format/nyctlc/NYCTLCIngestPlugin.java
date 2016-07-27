@@ -303,6 +303,9 @@ public class NYCTLCIngestPlugin extends
 
 					final String[] vals = line.split(",");
 					final NYCTLCEntry pt = new NYCTLCEntry();
+					
+					pt.setCabType(cabType);
+					//Sets the cabType beforehand because there is no cabType column in the table
 					Set<Field> requiredFieldsMissing = new HashSet<Field>(
 							NYCTLCUtils.REQUIRED_FIELDS);
 					for (int fieldIdx = 0; fieldIdx < fields.length; fieldIdx++) {
