@@ -3,6 +3,7 @@ package mil.nga.giat.geowave.format.nyctlc;
 import com.vividsolutions.jts.geom.Coordinate;
 import com.vividsolutions.jts.geom.Point;
 import mil.nga.giat.geowave.adapter.vector.ingest.AbstractSimpleFeatureIngestPlugin;
+import mil.nga.giat.geowave.adapter.vector.ingest.SimpleFeatureIngestOptions;
 import mil.nga.giat.geowave.core.geotime.store.dimension.GeometryWrapper;
 import mil.nga.giat.geowave.core.geotime.store.dimension.Time;
 import mil.nga.giat.geowave.core.index.ByteArrayId;
@@ -11,6 +12,7 @@ import mil.nga.giat.geowave.core.ingest.GeoWaveData;
 import mil.nga.giat.geowave.core.ingest.IngestPluginBase;
 import mil.nga.giat.geowave.core.ingest.hdfs.mapreduce.IngestWithMapper;
 import mil.nga.giat.geowave.core.ingest.hdfs.mapreduce.IngestWithReducer;
+import mil.nga.giat.geowave.core.ingest.spi.IngestFormatOptionProvider;
 import mil.nga.giat.geowave.core.store.CloseableIterator;
 import mil.nga.giat.geowave.core.store.adapter.WritableDataAdapter;
 import mil.nga.giat.geowave.core.store.data.field.FieldVisibilityHandler;
@@ -36,6 +38,7 @@ import java.util.Collection;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Scanner;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
@@ -54,9 +57,20 @@ public class NYCTLCIngestPlugin extends
 	private final SimpleFeatureType pointType;
 	private final SimpleFeatureBuilder pointBuilder;
 	private final ByteArrayId pointKey;
+	private boolean dropoff = false;
 
 	public NYCTLCIngestPlugin() {
-		pointType = NYCTLCUtils.createPointDataType();
+		this(
+				null);
+	}
+
+	public NYCTLCIngestPlugin(
+			NYCTLCOptionProvider options ) {
+
+		if (options != null) {
+			dropoff = options.isDropoff();
+		}
+		pointType = NYCTLCUtils.createPointDataType(dropoff);
 		pointBuilder = new SimpleFeatureBuilder(
 				pointType);
 		pointKey = new ByteArrayId(
@@ -75,8 +89,17 @@ public class NYCTLCIngestPlugin extends
 
 	@Override
 	protected SimpleFeatureType[] getTypes() {
+
+		if (dropoff == true) {
+			System.out.println("Using Drop-Off points");
+		}
+		else {
+			System.out.println("Using Pick-Up points");
+		}
+
 		return new SimpleFeatureType[] {
-			NYCTLCUtils.createPointDataType()
+
+			NYCTLCUtils.createPointDataType(dropoff)
 		};
 	}
 
@@ -118,7 +141,7 @@ public class NYCTLCIngestPlugin extends
 								NYCTLCUtils.Field.DROPOFF_DATETIME.getIndexedName(),
 								new Date(
 										point.getDropoffDatetime()));
-						uniqueId += point.getPickupDatetime() + "_";
+						uniqueId += point.getDropoffDatetime() + "_";
 						break;
 					case PASSENGER_COUNT:
 						pointBuilder.set(
@@ -303,9 +326,10 @@ public class NYCTLCIngestPlugin extends
 
 					final String[] vals = line.split(",");
 					final NYCTLCEntry pt = new NYCTLCEntry();
-					
+
 					pt.setCabType(cabType);
-					//Sets the cabType beforehand because there is no cabType column in the table
+					// Sets the cabType beforehand because there is no cabType
+					// column in the table
 					Set<Field> requiredFieldsMissing = new HashSet<Field>(
 							NYCTLCUtils.REQUIRED_FIELDS);
 					for (int fieldIdx = 0; fieldIdx < fields.length; fieldIdx++) {

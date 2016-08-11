@@ -70,25 +70,6 @@ public class NYCTLCDataAdapter extends
 	}
 
 	@Override
-	protected IndexFieldHandler<SimpleFeature, Time, Object> getTimeRangeHandler(
-			SimpleFeatureType featureType ) {
-		return null;
-	}
-
-	@Override
-	public boolean hasTemporalConstraints() {
-		return false;
-	}
-
-	@Override
-	public synchronized TimeDescriptors getTimeDescriptors() {
-		return new TimeDescriptors();
-	}
-
-	@Override
-	public synchronized void resetTimeDescriptors() {}
-
-	@Override
 	protected void init(
 			List<? extends IndexFieldHandler<SimpleFeature, ? extends CommonIndexValue, Object>> indexFieldHandlers,
 			Object defaultIndexHandlerData ) {

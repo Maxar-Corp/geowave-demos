@@ -13,6 +13,7 @@ import org.opengis.feature.simple.SimpleFeatureType;
 
 import com.vividsolutions.jts.geom.Geometry;
 
+import mil.nga.giat.geowave.adapter.vector.utils.TimeDescriptors.TimeDescriptorConfiguration;
 import mil.nga.giat.geowave.format.nyctlc.statistics.NYCTLCStatistics;
 
 /**
@@ -22,6 +23,7 @@ public class NYCTLCUtils
 {
 
 	public static final String NYCTLC_POINT_FEATURE = "nyctlcpoint";
+	public static final String NYCTLC_POINT_FEATURE_DROPOFF = "nyctlcdropoffpoint";
 
 	public static final Set<Field> REQUIRED_FIELDS = Collections.unmodifiableSet(new HashSet<Field>(
 			Arrays.asList(new Field[] {
@@ -29,7 +31,8 @@ public class NYCTLCUtils
 				Field.DROPOFF_LATITUDE,
 				Field.PICKUP_LONGITUDE,
 				Field.PICKUP_LATITUDE,
-				Field.PICKUP_DATETIME
+				Field.PICKUP_DATETIME,
+				Field.DROPOFF_DATETIME
 			})));
 
 	public enum Field {
@@ -286,10 +289,9 @@ public class NYCTLCUtils
 		}
 	}
 
-	public static SimpleFeatureType createPointDataType() {
+	public static SimpleFeatureType createPointDataType(
+			Boolean dropoff ) {
 		final SimpleFeatureTypeBuilder simpleFeatureTypeBuilder = new SimpleFeatureTypeBuilder();
-		simpleFeatureTypeBuilder.setName(NYCTLC_POINT_FEATURE);
-
 		final AttributeTypeBuilder attributeTypeBuilder = new AttributeTypeBuilder();
 
 		for (final Field field : Field.values()) {
@@ -299,7 +301,32 @@ public class NYCTLCUtils
 					field.getIndexedName()));
 		}
 
-		return simpleFeatureTypeBuilder.buildFeatureType();
+		if (dropoff == true) {
+			simpleFeatureTypeBuilder.setName(NYCTLC_POINT_FEATURE_DROPOFF);
+
+			simpleFeatureTypeBuilder.set(
+					7,
+					attributeTypeBuilder.binding(
+							Field.DROPOFF_LOCATION.getBinding()).nillable(
+							Field.DROPOFF_LOCATION.isNillable()).buildDescriptor(
+							Field.DROPOFF_LOCATION.getIndexedName()));
+			simpleFeatureTypeBuilder.set(
+					12,
+					attributeTypeBuilder.binding(
+							Field.PICKUP_LOCATION.getBinding()).nillable(
+							Field.PICKUP_LOCATION.isNillable()).buildDescriptor(
+							Field.PICKUP_LOCATION.getIndexedName()));
+		}
+		else {
+			simpleFeatureTypeBuilder.setName(NYCTLC_POINT_FEATURE);
+
+		}
+		SimpleFeatureType type = simpleFeatureTypeBuilder.buildFeatureType();
+
+		TimeDescriptorConfiguration config = new TimeDescriptorConfiguration();
+		config.setTimeName(dropoff ? Field.DROPOFF_DATETIME.getIndexedName() : Field.PICKUP_DATETIME.getIndexedName());
+		config.updateType(type);
+		return type;
 	}
 
 	public static boolean validate(
