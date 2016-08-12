@@ -2,7 +2,7 @@
   composes: stackingOrder from '../styles/common/overlays.css';
   list-style: none;
   position: absolute;
-  bottom: 50px;
+  bottom: 200px;
   right: 40px;
   width: 400px;
   margin: 0;

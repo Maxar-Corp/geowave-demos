@@ -9,6 +9,12 @@
     "es6": true,
     "node": true
   },
+
+  "globals": {
+    L: true,
+    angular: true
+  },
+
   "extends": ["plugin:react/recommended"],
   "rules": {
     "comma-dangle": 1,

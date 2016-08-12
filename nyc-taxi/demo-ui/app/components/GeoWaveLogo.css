@@ -6,6 +6,9 @@
   width: 30vw;
 }
 
+.hideLogo .root {
+  display: none;
+}
 .root a {
   cursor: pointer;
 }
