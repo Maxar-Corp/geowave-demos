@@ -240,7 +240,7 @@ public class NYCTLCService
 				queryOptions.setAggregation(
 						new NYCTLCAggregation(),
 						new NYCTLCDataAdapter(
-								NYCTLCUtils.createPointDataType()));
+								NYCTLCUtils.createPointDataType(false)));
 
 				final CloseableIterator<NYCTLCStatistics> results = dataStore.query(
 						queryOptions,
@@ -360,7 +360,7 @@ public class NYCTLCService
 				queryOptions.setAggregation(
 						aggr,
 						new NYCTLCDataAdapter(
-								NYCTLCUtils.createPointDataType()));
+								NYCTLCUtils.createPointDataType(false)));
 
 				final CloseableIterator<NYCTLCStatistics> results = dataStore.query(
 						queryOptions,

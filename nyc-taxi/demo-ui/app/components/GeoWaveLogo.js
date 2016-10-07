@@ -5,7 +5,13 @@ import logo from '../images/geowave-logo.svg'
 export default class GeoWaveLogo extends Component {
   render() {
     return (
-      <img className={styles.root} src={logo}/>
+   		<div className={`${this.props.infoVisible? styles.hideLogo : ""}`}>
+      		<img className={styles.root} src={logo}/>
+    	</div>
     )
   }
+}
+
+GeoWaveLogo.propTypes = {
+	infoVisible: React.PropTypes.bool.isRequired
 }

@@ -1,5 +1,5 @@
 .root {
-  z-index: 99;
+  z-index: 98;
   position: absolute;
   top: 0;
   left: 0;
@@ -8,6 +8,13 @@
   overflow: hidden;
 }
 
+.hideBoroughs .borough {
+  display: none;
+}
+
+.hideBoroughs2 .borough {
+  display: none;
+}
 .map {
   position: absolute;
   top: 0;
@@ -95,4 +102,40 @@
   composes: borough;
   fill: red;
   stroke: red;
+}
+
+.button {
+  background-image: linear-gradient(to bottom, hsl(234, 25%, 85%), hsl(234, 0%, 71%));
+  width: 220px;
+  height: 40px;
+  padding: 0px;
+  border: none;
+  outline-color: black;
+  outline: solid;
+
+}
+
+.button:hover {
+  color: #fff;
+}
+
+.button:active {
+  position: relative;
+  top: 2px;
+}
+
+
+
+@media (max-width: 480px) {
+  .button {
+    width: 160px
+  }
+}
+.root2 {
+  display:inline-block;
+  z-index: 99;
+  position: absolute;
+  top: 20px;
+  right: 30px;
+  list-style-type: none;
 }

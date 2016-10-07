@@ -7,7 +7,7 @@ const moment = require('moment')
 
 const app = express()
 
-app.use('/nyc-taxi/shapes', express.static(path.join(__dirname, 'data')))
+app.use('/nyc-taxi/neighborhoods/', express.static(path.join(__dirname, 'data')))
 
 app.use(morgan('dev'))
 
