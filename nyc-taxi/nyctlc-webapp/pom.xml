@@ -4,7 +4,7 @@
 		<artifactId>nyc-taxi-parent</artifactId>
 		<groupId>mil.nga.giat</groupId>
 		<relativePath>../</relativePath>
-		<version>0.9.2-SNAPSHOT</version>
+		<version>0.9.3-SNAPSHOT</version>
 	</parent>
 	<artifactId>geowave-nyctlc-webapp</artifactId>
 	<name>GeoWave NYCTLC Demo Webapp</name>
@@ -49,7 +49,7 @@
 		<dependency>
 			<groupId>mil.nga.giat</groupId>
 			<artifactId>geowave-datastore-accumulo</artifactId>
-			<version>0.9.2-SNAPSHOT</version>
+			<version>${project.version}</version>
 			<exclusions>
 				<exclusion>
 					<groupId>com.sun.jersey</groupId>
