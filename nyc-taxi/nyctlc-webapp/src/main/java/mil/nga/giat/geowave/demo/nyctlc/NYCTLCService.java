@@ -24,6 +24,7 @@ import net.sf.json.JSONObject;
 import org.apache.commons.io.IOUtils;
 import org.apache.log4j.Logger;
 import org.geotools.geometry.jts.GeometryBuilder;
+import org.opengis.feature.simple.SimpleFeature;
 
 import javax.servlet.ServletConfig;
 import javax.ws.rs.*;
@@ -103,10 +104,10 @@ public class NYCTLCService
 						"instanceName"),
 				ServiceUtils.getProperty(
 						props,
-						"userName"),
+						"gwuserName"),
 				ServiceUtils.getProperty(
 						props,
-						"password"),
+						"gwpassword"),
 				ServiceUtils.getProperty(
 						props,
 						"tableNamespace"));
@@ -357,27 +358,29 @@ public class NYCTLCService
 				queryOptions.setIndex(new NYCTLCDimensionalityTypeProvider().createPrimaryIndex());
 				NYCTLCAggregation aggr = new NYCTLCAggregation();
 				aggr.setParameters(allParams);
-				queryOptions.setAggregation(
-						aggr,
-						new NYCTLCDataAdapter(
-								NYCTLCUtils.createPointDataType(false)));
-
-				final CloseableIterator<NYCTLCStatistics> results = dataStore.query(
+				// queryOptions.setAggregation(
+				// aggr,
+				// new NYCTLCDataAdapter(
+				// NYCTLCUtils.createPointDataType(false)));
+				boolean atLeastOne = false;
+				try (final CloseableIterator<SimpleFeature> results = dataStore.query(
 						queryOptions,
-						query);
-
-				final NYCTLCStatistics stats = (results.hasNext()) ? results.next() : null;
-
-				try {
-					results.close();
+						query)) {
+					if (results.hasNext()) {
+						atLeastOne = true;
+					}
+					while (results.hasNext()) {
+						aggr.aggregate(results.next());
+					}
 				}
 				catch (IOException e) {
-					log.error(
-							"Unable to close ColseableIterator.",
-							e);
+					// TODO Auto-generated catch block
+					e.printStackTrace();
 				}
 
-				if (stats != null) {
+				final NYCTLCStatistics stats = (aggr.getResult());
+
+				if (atLeastOne) {
 					final JSONObject result = new JSONObject();
 
 					JSONArray durations = new JSONArray();

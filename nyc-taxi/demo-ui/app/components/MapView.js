@@ -19,8 +19,8 @@ const DEST_MARKER = leaflet.icon({
   iconAnchor: [50, 100]
 })
 
-const rmap = L.tileLayer.wms("http://localhost:8080/geoserver/nurc/wms", { //change this
-    layers: 'nurc:nyc_kde', //change this
+const rmap = L.tileLayer.wms("http://ec2-52-87-185-11.compute-1.amazonaws.com:8001/geoserver/geowave/wms", { //change this
+    layers: 'geowave:kde', //change this
     format: 'image/png',
     transparent: true,
     version: '1.1.0',
@@ -29,8 +29,8 @@ const rmap = L.tileLayer.wms("http://localhost:8080/geoserver/nurc/wms", { //cha
     tileSize: 512
 })
 
-const rmapdrop = L.tileLayer.wms("http://localhost:8080/geoserver/nurc/wms", { //change this
-    layers: 'nurc:nyc_kde_drop', //change this
+const rmapdrop = L.tileLayer.wms("http://ec2-52-87-185-11.compute-1.amazonaws.com:8001/geoserver/geowave/wms", { //change this
+    layers: 'geowave:nyc_kde_drop', //change this
     format: 'image/png',
     transparent: true,
     version: '1.1.0',
@@ -39,15 +39,15 @@ const rmapdrop = L.tileLayer.wms("http://localhost:8080/geoserver/nurc/wms", { /
     tileSize: 512
 })
 
-const vmap = L.tileLayer.wms("http://localhost:8080/geoserver/nurc/wms", { //change this
+const vmap = L.tileLayer.wms("http://ec2-52-87-185-11.compute-1.amazonaws.com:8001/geoserver/geowave/wms", { //change this
     layers: 'nurc:nyctlcpoint', //change this
     format: 'image/png',
     transparent: true,
     version: '1.1.0'
 });
 
-const vmapdrop = L.tileLayer.wms("http://localhost:8080/geoserver/nurc/wms", { //change this
-    layers: 'nurc:nyctlcdropoffpoint', //change this
+const vmapdrop = L.tileLayer.wms("http://ec2-52-87-185-11.compute-1.amazonaws.com:8001/geoserver/geowave/wms", { //change this
+    layers: 'geowave:nyctlcdropoffpoint', //change this
     format: 'image/png',
     transparent: true,
     version: '1.1.0'
