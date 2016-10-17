@@ -103,10 +103,10 @@ public class NYCTLCService
 						"instanceName"),
 				ServiceUtils.getProperty(
 						props,
-						"userName"),
+						"gwuserName"),
 				ServiceUtils.getProperty(
 						props,
-						"password"),
+						"gwpassword"),
 				ServiceUtils.getProperty(
 						props,
 						"tableNamespace"));

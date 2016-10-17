@@ -21,6 +21,8 @@ import mil.nga.giat.geowave.core.store.index.PrimaryIndex;
 import mil.nga.giat.geowave.format.nyctlc.NYCTLCUtils.Field;
 import mil.nga.giat.geowave.format.nyctlc.adapter.NYCTLCDataAdapter;
 import mil.nga.giat.geowave.format.nyctlc.avro.NYCTLCEntry;
+import mil.nga.giat.geowave.format.nyctlc.ingest.NYCTLCDimensionalityTypeProvider;
+
 import org.apache.avro.Schema;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang.math.NumberUtils;
@@ -49,7 +51,8 @@ public class NYCTLCIngestPlugin extends
 		AbstractSimpleFeatureIngestPlugin<NYCTLCEntry>
 {
 
-	private final static Logger LOGGER = Logger.getLogger(NYCTLCIngestPlugin.class);
+	private final static Logger LOGGER = Logger.getLogger(
+			NYCTLCIngestPlugin.class);
 
 	private final static String DATE_FORMAT = "yyyy-MM-dd HH:mm:ss";
 	private final static String DATE_START_FORMAT = "yyyyMMdd";
@@ -70,11 +73,13 @@ public class NYCTLCIngestPlugin extends
 		if (options != null) {
 			dropoff = options.isDropoff();
 		}
-		pointType = NYCTLCUtils.createPointDataType(dropoff);
+		pointType = NYCTLCUtils.createPointDataType(
+				dropoff);
 		pointBuilder = new SimpleFeatureBuilder(
 				pointType);
 		pointKey = new ByteArrayId(
-				StringUtils.stringToBinary(pointType.getTypeName()));
+				StringUtils.stringToBinary(
+						pointType.getTypeName()));
 	}
 
 	@Override
@@ -91,16 +96,37 @@ public class NYCTLCIngestPlugin extends
 	protected SimpleFeatureType[] getTypes() {
 
 		if (dropoff == true) {
-			System.out.println("Using Drop-Off points");
+			System.out.println(
+					"Using Drop-Off points");
 		}
 		else {
-			System.out.println("Using Pick-Up points");
+			System.out.println(
+					"Using Pick-Up points");
 		}
 
 		return new SimpleFeatureType[] {
 
-			NYCTLCUtils.createPointDataType(dropoff)
+			NYCTLCUtils.createPointDataType(
+					dropoff)
 		};
+	}
+
+	public SimpleFeature toGeoWaveDataInternalWrapper(
+			final NYCTLCEntry point,
+			final Collection<ByteArrayId> primaryIndexIds,
+			final String globalVisibility ) {
+		try (CloseableIterator<GeoWaveData<SimpleFeature>> it = toGeoWaveDataInternal(
+				point,
+				primaryIndexIds,
+				globalVisibility)) {
+			if (it.hasNext()) {
+				return it.next().getValue();
+			}
+		}
+		catch (IOException e) {
+			e.printStackTrace();
+		}
+		return null;
 	}
 
 	@Override
@@ -110,9 +136,11 @@ public class NYCTLCIngestPlugin extends
 			final String globalVisibility ) {
 
 		final Collection<ByteArrayId> indexIds = new ArrayList<ByteArrayId>();
-		if (primaryIndexIds != null && !primaryIndexIds.isEmpty()) indexIds.addAll(primaryIndexIds);
+		if (primaryIndexIds != null && !primaryIndexIds.isEmpty()) indexIds.addAll(
+				primaryIndexIds);
 		for (final PrimaryIndex index : getRequiredIndices())
-			indexIds.add(index.getId());
+			indexIds.add(
+					index.getId());
 
 		final List<GeoWaveData<SimpleFeature>> featureData = new ArrayList<GeoWaveData<SimpleFeature>>();
 		// for now ignore the default values because avro has already been
@@ -165,9 +193,10 @@ public class NYCTLCIngestPlugin extends
 						break;
 					case PICKUP_LOCATION:
 						final Point pickupPoint = mil.nga.giat.geowave.core.geotime.GeometryUtils.GEOMETRY_FACTORY
-								.createPoint(new Coordinate(
-										point.getPickupLongitude(),
-										point.getPickupLatitude()));
+								.createPoint(
+										new Coordinate(
+												point.getPickupLongitude(),
+												point.getPickupLatitude()));
 						pointBuilder.set(
 								NYCTLCUtils.Field.PICKUP_LOCATION.getIndexedName(),
 								pickupPoint);
@@ -195,9 +224,10 @@ public class NYCTLCIngestPlugin extends
 						break;
 					case DROPOFF_LOCATION:
 						final Point dropoffPoint = mil.nga.giat.geowave.core.geotime.GeometryUtils.GEOMETRY_FACTORY
-								.createPoint(new Coordinate(
-										point.getDropoffLongitude(),
-										point.getDropoffLatitude()));
+								.createPoint(
+										new Coordinate(
+												point.getDropoffLongitude(),
+												point.getDropoffLatitude()));
 						pointBuilder.set(
 								NYCTLCUtils.Field.DROPOFF_LOCATION.getIndexedName(),
 								dropoffPoint);
@@ -266,10 +296,12 @@ public class NYCTLCIngestPlugin extends
 				}
 			}
 
-			featureData.add(new GeoWaveData<SimpleFeature>(
-					pointKey,
-					indexIds,
-					pointBuilder.buildFeature(uniqueId)));
+			featureData.add(
+					new GeoWaveData<SimpleFeature>(
+							pointKey,
+							indexIds,
+							pointBuilder.buildFeature(
+									uniqueId)));
 
 		}
 		return new CloseableIterator.Wrapper<GeoWaveData<SimpleFeature>>(
@@ -303,7 +335,8 @@ public class NYCTLCIngestPlugin extends
 				"yellow"))
 			cabType = 1;
 		else if (file.getName().toLowerCase().contains(
-				"green")) cabType = 2;
+				"green"))
+			cabType = 2;
 
 		BufferedReader fr = null;
 		BufferedReader br = null;
@@ -324,50 +357,68 @@ public class NYCTLCIngestPlugin extends
 
 					if (line.isEmpty()) continue;
 
-					final String[] vals = line.split(",");
+					final String[] vals = line.split(
+							",");
 					final NYCTLCEntry pt = new NYCTLCEntry();
 
-					pt.setCabType(cabType);
+					pt.setCabType(
+							cabType);
 					// Sets the cabType beforehand because there is no cabType
 					// column in the table
 					Set<Field> requiredFieldsMissing = new HashSet<Field>(
 							NYCTLCUtils.REQUIRED_FIELDS);
 					for (int fieldIdx = 0; fieldIdx < fields.length; fieldIdx++) {
-						final NYCTLCUtils.Field field = NYCTLCUtils.Field.getField(fields[fieldIdx]);
+						final NYCTLCUtils.Field field = NYCTLCUtils.Field.getField(
+								fields[fieldIdx]);
 						boolean success = true;
 						if (field != null && fieldIdx < vals.length) {
 							try {
 								switch (field) {
 									case VENDOR_ID:
-										if (vals[fieldIdx].equals("1") || vals[fieldIdx].equals("2"))
-											pt.setVendorId(Integer.parseInt(vals[fieldIdx]));
+										if (vals[fieldIdx].equals(
+												"1")
+												|| vals[fieldIdx].equals(
+														"2"))
+											pt.setVendorId(
+													Integer.parseInt(
+															vals[fieldIdx]));
 										else {
 											if (vals[fieldIdx].toLowerCase().equals(
 													"cmt")) {
-												pt.setVendorId(1);
-												requiredFieldsMissing.remove(field);
+												pt.setVendorId(
+														1);
+												requiredFieldsMissing.remove(
+														field);
 											}
 											else if (vals[fieldIdx].toLowerCase().equals(
 													"vts")) {
-												pt.setVendorId(2);
-												requiredFieldsMissing.remove(field);
+												pt.setVendorId(
+														2);
+												requiredFieldsMissing.remove(
+														field);
 											}
 											else {
 												success = false;
-												pt.setVendorId(0); // unknown
+												pt.setVendorId(
+														0); // unknown
 											}
 										}
 										break;
 									case PICKUP_DATETIME:
 										try {
-											final Date pickupDate = dateFormat.parse(vals[fieldIdx]);
-											pt.setPickupDatetime(pickupDate.getTime());
+											final Date pickupDate = dateFormat.parse(
+													vals[fieldIdx]);
+											pt.setPickupDatetime(
+													pickupDate.getTime());
 
-											final Date pickupDateStart = dateStartFormat.parse(dateStartFormat
-													.format(pickupDate));
-											pt.setTimeOfDaySec(new Long(
-													TimeUnit.MILLISECONDS.toSeconds(pickupDate.getTime()
-															- pickupDateStart.getTime())).longValue());
+											final Date pickupDateStart = dateStartFormat.parse(
+													dateStartFormat.format(
+															pickupDate));
+											pt.setTimeOfDaySec(
+													new Long(
+															TimeUnit.MILLISECONDS.toSeconds(
+																	pickupDate.getTime() - pickupDateStart.getTime()))
+																			.longValue());
 
 										}
 										catch (ParseException e) {
@@ -379,8 +430,9 @@ public class NYCTLCIngestPlugin extends
 										break;
 									case DROPOFF_DATETIME:
 										try {
-											pt.setDropoffDatetime(dateFormat.parse(
-													vals[fieldIdx]).getTime());
+											pt.setDropoffDatetime(
+													dateFormat.parse(
+															vals[fieldIdx]).getTime());
 										}
 										catch (ParseException e) {
 											success = false;
@@ -390,32 +442,74 @@ public class NYCTLCIngestPlugin extends
 										}
 										break;
 									case PASSENGER_COUNT:
-										pt.setPassengerCount(Integer.parseInt(vals[fieldIdx]));
+										pt.setPassengerCount(
+												Integer.parseInt(
+														vals[fieldIdx]));
 										break;
 									case TRIP_DISTANCE:
-										pt.setTripDistance(Double.parseDouble(vals[fieldIdx]));
+										pt.setTripDistance(
+												Double.parseDouble(
+														vals[fieldIdx]));
 										break;
 									case PICKUP_LONGITUDE:
-										pt.setPickupLongitude(Double.parseDouble(vals[fieldIdx]));
+										double longitude = Double.parseDouble(
+												vals[fieldIdx]);
+										if (longitude > NYCTLCDimensionalityTypeProvider.MAX_LON
+												|| longitude < NYCTLCDimensionalityTypeProvider.MIN_LON) {
+											success = false;
+											break;
+										}
+										pt.setPickupLongitude(
+												longitude);
 										break;
 									case PICKUP_LATITUDE:
-										pt.setPickupLatitude(Double.parseDouble(vals[fieldIdx]));
+										double latitude = Double.parseDouble(
+												vals[fieldIdx]);
+										if (latitude > NYCTLCDimensionalityTypeProvider.MAX_LAT
+												|| latitude < NYCTLCDimensionalityTypeProvider.MIN_LAT) {
+											success = false;
+											break;
+										}
+										pt.setPickupLatitude(
+												latitude);
 										break;
 									case PICKUP_LOCATION:
 										// do nothing
 										break;
 									case STORE_AND_FWD_FLAG:
 										String strFwdFlg = vals[fieldIdx].toLowerCase();
-										pt.setStoreAndFwdFlag(strFwdFlg.equals("1") || strFwdFlg.equals("y"));
+										pt.setStoreAndFwdFlag(
+												strFwdFlg.equals(
+														"1")
+														|| strFwdFlg.equals(
+																"y"));
 										break;
 									case RATE_CODE_ID:
-										pt.setRateCodeId(Integer.parseInt(vals[fieldIdx]));
+										pt.setRateCodeId(
+												Integer.parseInt(
+														vals[fieldIdx]));
 										break;
 									case DROPOFF_LONGITUDE:
-										pt.setDropoffLongitude(Double.parseDouble(vals[fieldIdx]));
+										double dropOffLongitude = Double.parseDouble(
+												vals[fieldIdx]);
+										if (dropOffLongitude > NYCTLCDimensionalityTypeProvider.MAX_LON
+												|| dropOffLongitude < NYCTLCDimensionalityTypeProvider.MIN_LON) {
+											success = false;
+											break;
+										}
+										pt.setDropoffLongitude(
+												dropOffLongitude);
 										break;
 									case DROPOFF_LATITUDE:
-										pt.setDropoffLatitude(Double.parseDouble(vals[fieldIdx]));
+										double dropOffLatitude = Double.parseDouble(
+												vals[fieldIdx]);
+										if (dropOffLatitude > NYCTLCDimensionalityTypeProvider.MAX_LAT
+												|| dropOffLatitude < NYCTLCDimensionalityTypeProvider.MIN_LAT) {
+											success = false;
+											break;
+										}
+										pt.setDropoffLatitude(
+												dropOffLatitude);
 										break;
 									case DROPOFF_LOCATION:
 										// do nothing
@@ -424,89 +518,141 @@ public class NYCTLCIngestPlugin extends
 										String pmntType = vals[fieldIdx].toLowerCase().replace(
 												"_",
 												"").replace(
-												" ",
-												"");
-										if (NumberUtils.isNumber(pmntType)) {
-											pt.setPaymentType(Integer.parseInt(vals[fieldIdx]));
+														" ",
+														"");
+										if (NumberUtils.isNumber(
+												pmntType)) {
+											pt.setPaymentType(
+													Integer.parseInt(
+															vals[fieldIdx]));
 										}
 										else {
-											if (pmntType.contains("crd") || pmntType.contains("cre"))
-												pt.setPaymentType(1);
-											else if (pmntType.contains("cas") || pmntType.contains("csh"))
-												pt.setPaymentType(2);
-											else if (pmntType.contains("nocharge") || pmntType.equals("no")
-													|| pmntType.equals("na") || pmntType.equals("noc"))
-												pt.setPaymentType(3);
-											else if (pmntType.contains("dis"))
-												pt.setPaymentType(4);
-											else if (pmntType.contains("unk"))
-												pt.setPaymentType(5);
-											else if (pmntType.contains("void"))
-												pt.setPaymentType(6);
+											if (pmntType.contains(
+													"crd")
+													|| pmntType.contains(
+															"cre"))
+												pt.setPaymentType(
+														1);
+											else if (pmntType.contains(
+													"cas")
+													|| pmntType.contains(
+															"csh"))
+												pt.setPaymentType(
+														2);
+											else if (pmntType.contains(
+													"nocharge")
+													|| pmntType.equals(
+															"no")
+													|| pmntType.equals(
+															"na")
+													|| pmntType.equals(
+															"noc"))
+												pt.setPaymentType(
+														3);
+											else if (pmntType.contains(
+													"dis"))
+												pt.setPaymentType(
+														4);
+											else if (pmntType.contains(
+													"unk"))
+												pt.setPaymentType(
+														5);
+											else if (pmntType.contains(
+													"void"))
+												pt.setPaymentType(
+														6);
 											else {
 												success = false;
-												LOGGER.warn("Unknown payment type [" + pmntType + "]");
-												pt.setPaymentType(0);
+												LOGGER.warn(
+														"Unknown payment type [" + pmntType + "]");
+												pt.setPaymentType(
+														0);
 											}
 										}
 										break;
 									case FARE_AMOUNT:
-										pt.setFareAmount(Double.parseDouble(vals[fieldIdx]));
+										pt.setFareAmount(
+												Double.parseDouble(
+														vals[fieldIdx]));
 										break;
 									case EXTRA:
-										pt.setExtra(Double.parseDouble(vals[fieldIdx]));
+										pt.setExtra(
+												Double.parseDouble(
+														vals[fieldIdx]));
 										break;
 									case MTA_TAX:
-										pt.setMtaTax(Double.parseDouble(vals[fieldIdx]));
+										pt.setMtaTax(
+												Double.parseDouble(
+														vals[fieldIdx]));
 										break;
 									case IMPROVEMENT_SURCHARGE:
-										pt.setImprovementSurcharge(Double.parseDouble(vals[fieldIdx]));
+										pt.setImprovementSurcharge(
+												Double.parseDouble(
+														vals[fieldIdx]));
 										break;
 									case TIP_AMOUNT:
-										pt.setTipAmount(Double.parseDouble(vals[fieldIdx]));
+										pt.setTipAmount(
+												Double.parseDouble(
+														vals[fieldIdx]));
 										break;
 									case TOLLS_AMOUNT:
-										pt.setTollsAmount(Double.parseDouble(vals[fieldIdx]));
+										pt.setTollsAmount(
+												Double.parseDouble(
+														vals[fieldIdx]));
 										break;
 									case TOTAL_AMOUNT:
-										pt.setTotalAmount(Double.parseDouble(vals[fieldIdx]));
+										pt.setTotalAmount(
+												Double.parseDouble(
+														vals[fieldIdx]));
 										break;
 									case TRIP_TYPE:
-										pt.setTripType(Integer.parseInt(vals[fieldIdx]));
+										pt.setTripType(
+												Integer.parseInt(
+														vals[fieldIdx]));
 										break;
 									case EHAIL_FEE:
-										pt.setEhailFee(Double.parseDouble(vals[fieldIdx]));
+										pt.setEhailFee(
+												Double.parseDouble(
+														vals[fieldIdx]));
 										break;
 									case CAB_TYPE:
-										pt.setCabType(cabType);
+										pt.setCabType(
+												cabType);
 										break;
 								}
 
 								if (success) {
-									requiredFieldsMissing.remove(field);
+									requiredFieldsMissing.remove(
+											field);
 								}
 							}
 							catch (NumberFormatException | NullPointerException e) {
 								if (!vals[fieldIdx].isEmpty())
-									LOGGER.warn("Unable to parse field [" + fields[fieldIdx] + "] with value ["
-											+ vals[fieldIdx] + "]");
+									LOGGER.warn(
+											"Unable to parse field [" + fields[fieldIdx] + "] with value ["
+													+ vals[fieldIdx] + "]");
 								else
-									LOGGER.info("Field [" + fields[fieldIdx] + "] has no value");
+									LOGGER.info(
+											"Field [" + fields[fieldIdx] + "] has no value");
 							}
 						}
 						else {
 							if (field == null)
-								LOGGER.warn("Unknown field encountered: " + fields[fieldIdx]);
-							else if (fieldIdx >= vals.length && !field.equals(NYCTLCUtils.Field.TRIP_TYPE))
-								LOGGER.warn("Field not present in row: " + fields[fieldIdx]);
+								LOGGER.warn(
+										"Unknown field encountered: " + fields[fieldIdx]);
+							else if (fieldIdx >= vals.length && !field.equals(
+									NYCTLCUtils.Field.TRIP_TYPE))
+								LOGGER.warn(
+										"Field not present in row: " + fields[fieldIdx]);
 						}
 					}
 					if (requiredFieldsMissing.isEmpty()) {
-						pts.add(pt);
+						pts.add(
+								pt);
 					}
 
-					if (pts.size() % 10000 == 0)
-						LOGGER.warn(pts.size() + " entries serialized to avro from [" + file.getName() + "].");
+					if (pts.size() % 10000 == 0) LOGGER.warn(
+							pts.size() + " entries serialized to avro from [" + file.getName() + "].");
 				}
 			}
 			catch (final IOException e) {
@@ -521,10 +667,13 @@ public class NYCTLCIngestPlugin extends
 					e);
 		}
 		finally {
-			IOUtils.closeQuietly(br);
-			IOUtils.closeQuietly(fr);
+			IOUtils.closeQuietly(
+					br);
+			IOUtils.closeQuietly(
+					fr);
 		}
-		return pts.toArray(new NYCTLCEntry[pts.size()]);
+		return pts.toArray(
+				new NYCTLCEntry[pts.size()]);
 	}
 
 	@Override
@@ -571,7 +720,8 @@ public class NYCTLCIngestPlugin extends
 	@Override
 	public boolean supportsFile(
 			File file ) {
-		return NYCTLCUtils.validate(file);
+		return NYCTLCUtils.validate(
+				file);
 	}
 
 	public static class IngestNYCTLCFromHdfs extends

@@ -46,10 +46,10 @@ public class NYCTLCDimensionalityTypeProvider implements
 	// BBox of NYC is more contrained, but we'll give it a little buffer
 	// North Latitude: 40.915256 South Latitude: 40.496044 East Longitude:
 	// -73.700272 West Longitude: -74.255735
-	private static final double MIN_LAT = 40.3;
-	private static final double MAX_LAT = 41.1;
-	private static final double MIN_LON = -74.375;
-	private static final double MAX_LON = -73.575;
+	public static final double MIN_LAT = 40.3;
+	public static final double MAX_LAT = 41.1;
+	public static final double MIN_LON = -74.375;
+	public static final double MAX_LON = -73.575;
 	private static final String DEFAULT_NYCTLC_ID_STR = "NYCTLC_IDX";
 
 	public final static ByteArrayId PICKUP_GEOMETRY_FIELD_ID = new ByteArrayId(
