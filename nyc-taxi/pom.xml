@@ -158,6 +158,7 @@
 		</plugins>
 	</build>
 	<modules>
+		<module>nyctlc-process</module>
 		<module>nyctlc-format</module>
 		<module>nyctlc-webapp</module>
 	</modules>

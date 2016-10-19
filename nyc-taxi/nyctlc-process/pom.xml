@@ -12,9 +12,55 @@
 	<name>GeoWave NYC TLC Processing Support</name>
 	<description>GeoWave process and analytic support for New York City Taxi and Limousine Commission dataset</description>
 	<dependencies>
+		<dependency> <!-- Spark dependency -->
+			<groupId>org.apache.spark</groupId>
+			<artifactId>spark-core_2.11</artifactId>
+			<version>2.0.0</version>
+			<scope>provided</scope>
+		</dependency>
+		<dependency> <!-- Spark dependency -->
+			<groupId>org.apache.spark</groupId>
+			<artifactId>spark-sql_2.11</artifactId>
+			<version>2.0.0</version>
+			<scope>provided</scope>
+			<exclusions>
+				<exclusion>
+					<groupId>org.scala-lang</groupId>
+					<artifactId>scala-reflect</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
 		<dependency>
 			<groupId>mil.nga.giat</groupId>
 			<artifactId>geowave-adapter-vector</artifactId>
+			<version>${project.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>mil.nga.giat</groupId>
+			<artifactId>geowave-analytic-spark</artifactId>
+			<version>${project.version}</version>
+			<exclusions>
+				<exclusion>
+					<groupId>org.apache.spark</groupId>
+					<artifactId>spark-core_2.10</artifactId>
+				</exclusion>
+				<exclusion>
+					<groupId>org.scala-lang</groupId>
+					<artifactId>scala-compiler</artifactId>
+				</exclusion>
+				<exclusion>
+					<groupId>org.scala-lang</groupId>
+					<artifactId>scala-library</artifactId>
+				</exclusion>
+				<exclusion>
+					<groupId>org.scala-lang</groupId>
+					<artifactId>scala-reflect</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
+		<dependency>
+			<groupId>mil.nga.giat</groupId>
+			<artifactId>geowave-analytic-mapreduce</artifactId>
 			<version>${project.version}</version>
 		</dependency>
 		<dependency>
@@ -26,6 +72,16 @@
 			<groupId>mil.nga.giat</groupId>
 			<artifactId>geowave-core-ingest</artifactId>
 			<version>${project.version}</version>
+			<exclusions>
+				<exclusion>
+					<groupId>org.scala-lang</groupId>
+					<artifactId>scala-library</artifactId>
+				</exclusion>
+				<exclusion>
+					<groupId>org.apache.kafka</groupId>
+					<artifactId>kafka_2.10</artifactId>
+				</exclusion>
+			</exclusions>
 		</dependency>
 		<dependency>
 			<groupId>junit</groupId>
@@ -47,46 +103,28 @@
 			<groupId>mil.nga.giat</groupId>
 			<artifactId>geowave-datastore-hbase</artifactId>
 			<version>${project.version}</version>
-		</dependency>
-		<dependency> <!-- Spark dependency -->
-			<groupId>org.apache.spark</groupId>
-			<artifactId>spark-core_2.11</artifactId>
-			<version>2.0.0</version>
-			<scope>provided</scope>
-		</dependency>
-		<dependency> <!-- Spark dependency -->
-			<groupId>org.apache.spark</groupId>
-			<artifactId>spark-sql_2.11</artifactId>
-			<version>2.0.0</version>
-			<scope>provided</scope>
-		</dependency>
+		</dependency><dependency>
+    <groupId>com.amazonaws</groupId>
+    <artifactId>aws-java-sdk-s3</artifactId>
+    <version>1.10.75</version>
+</dependency>
 	</dependencies>
-
+	<build>
+			<plugins>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-compiler-plugin</artifactId>
+					<version>2.3.2</version>
+					<configuration>
+						<source>1.8</source>
+						<target>1.8</target>
+					</configuration>
+				</plugin>
+			</plugins>
+	</build>
 	<profiles>
 		<profile>
-			<id>geowave-tools-singlejar</id>
-			<dependencies>
-				<dependency>
-					<groupId>mil.nga.giat</groupId>
-					<artifactId>geowave-cli-osm</artifactId>
-					<version>${project.version}</version>
-				</dependency>
-				<dependency>
-					<groupId>mil.nga.giat</groupId>
-					<artifactId>geowave-cli-geoserver</artifactId>
-					<version>${project.version}</version>
-				</dependency>
-				<dependency>
-					<groupId>mil.nga.giat</groupId>
-					<artifactId>geowave-cli-landsat8</artifactId>
-					<version>${project.version}</version>
-				</dependency>
-				<dependency>
-					<groupId>mil.nga.giat</groupId>
-					<artifactId>geowave-datastore-hbase</artifactId>
-					<version>${project.version}</version>
-				</dependency>
-			</dependencies>
+			<id>sparkingest</id>
 			<build>
 				<plugins>
 					<plugin>
@@ -130,7 +168,7 @@
 										<transformer
 											implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
 											<manifestEntries>
-												<Main-Class>mil.nga.giat.geowave.core.cli.GeoWaveMain</Main-Class>
+												<Main-Class>mil.nga.giat.geowave.process.nyctlc.SparkIngest</Main-Class>
 												<Specification-Title>GeoWave</Specification-Title>
 												<Specification-Vendor>LocationTech</Specification-Vendor>
 												<Specification-Version>${project.version}</Specification-Version>
@@ -160,7 +198,7 @@
 									</transformers>
 									<createDependencyReducedPom>false</createDependencyReducedPom>
 									<minimizeJar>false</minimizeJar>
-									<finalName>${tools.finalName}</finalName>
+									<finalName>geowave-nyctlc-ingest</finalName>
 								</configuration>
 							</execution>
 						</executions>
