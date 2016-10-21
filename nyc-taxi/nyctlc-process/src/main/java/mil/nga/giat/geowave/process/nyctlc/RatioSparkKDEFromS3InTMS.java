@@ -23,7 +23,7 @@ import org.opengis.referencing.NoSuchAuthorityCodeException;
 import mil.nga.giat.geowave.process.nyctlc.SparkIngest.RowToFeature;
 import scala.Tuple2;
 
-public class SparkKDEFromS3
+public class RatioSparkKDEFromS3InTMS
 {
 	public static void main(
 			final String[] args )
@@ -39,10 +39,15 @@ public class SparkKDEFromS3
 				.config(
 						"spark.kryo.registrator",
 						GeoWaveRegistrator.class.getCanonicalName())
+//				 .config(
+//				 "spark.sql.warehouse.dir",
+//				 "file:///C:/Temp/spark-warehouse")
+//				 .master(
+//				 "local")
 				.getOrCreate();
 		final int year = 2013;
 		final List<String> paths = new ArrayList<>();
-		for (int month = 8; month <= 12; month++) {
+		for (int month = 8; month <= 10; month++) {
 			paths.add(
 					String.format(
 							"s3://nyc-tlc/trip data/green_tripdata_%04d-%02d.csv",
@@ -96,6 +101,8 @@ public class SparkKDEFromS3
 				.csv(
 						paths.toArray(
 								new String[] {}));
+
+//						 "C:\\Users\\rfecher\\Downloads\\green_tripdata_2013-08.csv");
 		final int minLevel = Integer.parseInt(
 				args[0]);
 
@@ -117,14 +124,8 @@ public class SparkKDEFromS3
 		sfRdd.persist(
 				StorageLevel.MEMORY_AND_DISK());
 
-		for (int level = minLevel; level <= maxLevel; level++) {
-			final int pixelLevel = level + SparkKDE.TILE_SCALE;
-			final int numXPosts = (int) Math.pow(
-					2,
-					pixelLevel + 1);
-			final int numYPosts = (int) Math.pow(
-					2,
-					pixelLevel);
+		for (int zoom = minLevel; zoom <= maxLevel; zoom++) {
+			final int finalZoom = zoom;
 			final Function<Double, Double> identity = x -> x;
 
 			final Function2<Double, Double, Double> sum = (
@@ -132,14 +133,28 @@ public class SparkKDEFromS3
 					final Double y ) -> {
 				return x + y;
 			};
-			final PairFlatMapFunction<SimpleFeature, Long, Double> cellMapper = s -> SparkKDE.getCells(
+			final PairFlatMapFunction<SimpleFeature, Long, Double> pickupCellMapper = s -> SparkKDE.getTMSCells(
 					s,
-					numXPosts,
-					numYPosts);
+					false,
+					finalZoom);
+			final PairFlatMapFunction<SimpleFeature, Long, Double> dropOfffCellMapper = s -> SparkKDE.getTMSCells(
+					s,
+					true,
+					finalZoom);
 			final PairFunction<Tuple2<Long, Double>, Double, Long> swap = i -> i.swap();
-			final JavaPairRDD<Double, Long> rdd = sfRdd
+			final JavaPairRDD<Double, Long> rddPickups = sfRdd
 					.flatMapToPair(
-							cellMapper)
+							pickupCellMapper)
+					.combineByKey(
+							identity,
+							sum,
+							sum)
+					.mapToPair(
+							swap)
+					.sortByKey();
+			final JavaPairRDD<Double, Long> rddDropOffs = sfRdd
+					.flatMapToPair(
+							dropOfffCellMapper)
 					.combineByKey(
 							identity,
 							sum,
@@ -148,21 +163,48 @@ public class SparkKDEFromS3
 							swap)
 					.sortByKey();
 
-			final long count = rdd.cache().count();
-			final PairFunction<Tuple2<Tuple2<Double, Long>, Long>, Long, Double> calculatePercentile = t -> {
-				final double percentile = (double) t._2 / (double) count;
+			final long pickupCount = rddPickups.cache().count() - 1;
+			final PairFunction<Tuple2<Tuple2<Double, Long>, Long>, Long, Double> calculatePercentilePickup = t -> {
+				final double percentile = (double) t._2 / (double) pickupCount;
 				return new Tuple2<Long, Double>(
 						t._1._2,
 						percentile);
 			};
-			rdd
+			final JavaPairRDD<Long,Double> finalRddPickups =  rddPickups
 					.zipWithIndex()
 					.mapToPair(
-							calculatePercentile)
+							calculatePercentilePickup);
+			final long dropoffCount = rddDropOffs.cache().count() - 1;
+			final PairFunction<Tuple2<Tuple2<Double, Long>, Long>, Long, Double> calculatePercentileDropoff= t -> {
+				final double percentile = (double) t._2 / (double) dropoffCount;
+				return new Tuple2<Long, Double>(
+						t._1._2,
+						percentile);
+			};
+			final JavaPairRDD<Long,Double> finalRddDropOffs = rddDropOffs
+			.zipWithIndex()
+			.mapToPair(
+					calculatePercentileDropoff);
+			final PairFunction<Tuple2<Long,Tuple2<Double, Double>>, Double, Long> calculateRatio = t -> {
+				final double ratio = (double) t._2._1 / (double) t._2._2;
+				return new Tuple2<Double, Long>(
+						ratio,
+						t._1);
+			};
+			final JavaPairRDD<Double, Long> ratioRdd = finalRddDropOffs.join(finalRddPickups).mapToPair(calculateRatio).sortByKey();
+
+			final long ratioCount = ratioRdd.cache().count() - 1;
+			final PairFunction<Tuple2<Tuple2<Double, Long>, Long>, Long, Double> calculatePercentileRatio= t -> {
+				final double percentile = (double) t._2 / (double) ratioCount;
+				return new Tuple2<Long, Double>(
+						t._1._2,
+						percentile);
+			};
+			ratioRdd.zipWithIndex().mapToPair(calculatePercentileRatio)
 					.repartition(
 							1)
 					.saveAsObjectFile(
-							args[2] + "_" + level);
+							args[2] + "_" + finalZoom);
 		}
 		sfRdd.unpersist(
 				true);

@@ -34,6 +34,7 @@ import mil.nga.giat.geowave.core.store.operations.remote.options.StoreLoader;
 import mil.nga.giat.geowave.core.store.query.DistributableQuery;
 import mil.nga.giat.geowave.core.store.query.QueryOptions;
 import mil.nga.giat.geowave.format.nyctlc.NYCTLCIngestPlugin;
+import mil.nga.giat.geowave.format.nyctlc.NYCTLCUtils;
 import mil.nga.giat.geowave.mapreduce.input.GeoWaveInputKey;
 import scala.Tuple2;
 import scala.Tuple3;
@@ -41,7 +42,8 @@ import scala.reflect.ClassTag;
 
 public class SparkKDE
 {
-	public static final int TILE_SIZE = 256;
+	public static final int TILE_SCALE = 8;
+	public static final int TILE_SIZE = 1 << TILE_SCALE;
 
 	public static void main(
 			final String[] args )
@@ -248,6 +250,35 @@ public class SparkKDE
 				lat);
 	}
 
+	public static Tuple3<Integer, Integer, Integer> tmsCellToTile(
+			final long cellIndex,
+			final int zoom ) {
+		final int numPosts = 1 << (zoom + SparkKDE.TILE_SCALE);
+		final int xPost = (int) (cellIndex / numPosts);
+		final int yPost = (int) (cellIndex % numPosts);
+		return new Tuple3<Integer, Integer, Integer>(
+				zoom,
+				xPost / TILE_SIZE,
+				yPost / TILE_SIZE);
+	}
+
+	public static Tuple2<Tuple3<Integer, Integer, Integer>, Tuple2<Integer, Integer>> tmsCellToTileAndPosition(
+			final long cellIndex,
+			final int zoom ) {
+		final int numPosts = 1 << (zoom + SparkKDE.TILE_SCALE);
+		final int xPost = (int) (cellIndex / numPosts);
+		final int yPost = (int) (cellIndex % numPosts);
+
+		return new Tuple2<Tuple3<Integer, Integer, Integer>, Tuple2<Integer, Integer>>(
+				new Tuple3<Integer, Integer, Integer>(
+						zoom,
+						xPost / TILE_SIZE,
+						yPost / TILE_SIZE),
+				new Tuple2<Integer, Integer>(
+						xPost % TILE_SIZE,
+						yPost % TILE_SIZE));
+	}
+
 	public static Tuple2<Integer, Integer> interpolatePosition(
 			final long cellIndex,
 			final int numXPosts,
@@ -277,10 +308,19 @@ public class SparkKDE
 				cellIndex,
 				numXPosts,
 				numYPosts);
-		int xtile = (int) Math.floor(((lonLat._1 + 180) / 360) * (1 << zoom));
-		int ytile = (int) Math.floor(((1 - (Math.log(Math.tan(Math.toRadians(lonLat._2))
-				+ (1 / Math.cos(Math.toRadians(lonLat._2)))) / Math.PI)) / 2)
-				* (1 << zoom));
+		return getTileNumberFromLonLat(
+				lonLat,
+				zoom);
+	}
+
+	public static Tuple3<Integer, Integer, Integer> getTileNumberFromLonLat(
+			final Tuple2<Double, Double> lonLat,
+			final int zoom ) {
+		final Tuple2<Double, Double> coords = getTileCoordsFromLonLat(
+				lonLat,
+				zoom);
+		int xtile = (int) Math.floor(coords._1);
+		int ytile = (int) Math.floor(coords._2);
 		if (xtile < 0) {
 			xtile = 0;
 		}
@@ -295,6 +335,18 @@ public class SparkKDE
 		}
 		return new Tuple3<>(
 				zoom,
+				xtile,
+				ytile);
+	}
+
+	public static Tuple2<Double, Double> getTileCoordsFromLonLat(
+			final Tuple2<Double, Double> lonLat,
+			final int zoom ) {
+		final double xtile = ((lonLat._1 + 180) / 360) * (1 << zoom);
+		final double ytile = ((1 - (Math.log(Math.tan(Math.toRadians(lonLat._2))
+				+ (1 / Math.cos(Math.toRadians(lonLat._2)))) / Math.PI)) / 2)
+				* (1 << zoom);
+		return new Tuple2<Double, Double>(
 				xtile,
 				ytile);
 	}
@@ -377,6 +429,102 @@ public class SparkKDE
 						},
 						numXPosts,
 						numYPosts);
+			}
+		}
+		return cells.iterator();
+	}
+
+	public static Iterator<Tuple2<Long, Double>> getTMSCells(
+			final SimpleFeature s,
+			final boolean useDropoff,
+			final int zoom ) {
+		final List<Tuple2<Long, Double>> cells = new ArrayList<>();
+		final int numPosts = 1 << (zoom + TILE_SCALE);
+		Point pt = null;
+		if (s != null) {
+			final Object geomObj;
+			if (useDropoff) {
+				geomObj = s.getAttribute(NYCTLCUtils.Field.DROPOFF_LOCATION.getIndexedName());
+			}
+			else {
+				geomObj = s.getDefaultGeometry();
+			}
+			if ((geomObj != null) && (geomObj instanceof Geometry)) {
+				pt = ((Geometry) geomObj).getCentroid();
+				final Tuple2<Double, Double> coords = getTileCoordsFromLonLat(
+						new Tuple2<Double, Double>(
+								pt.getX(),
+								pt.getY()),
+						zoom + TILE_SCALE);
+				GaussianFilter.incrementPtFast(
+						new double[] {
+							coords._1,
+							coords._2
+						},
+						new int[] {
+							numPosts,
+							numPosts,
+						},
+						new CellCounter() {
+							@Override
+							public void increment(
+									final long cellId,
+									final double weight ) {
+								cells.add(new Tuple2<Long, Double>(
+										cellId,
+										weight));
+							}
+						});
+			}
+		}
+		return cells.iterator();
+	}
+
+	public static Iterator<Tuple2<Long, Tuple2<Double, Double>>> getTMSCellsWithAttribute(
+			final SimpleFeature s,
+			final boolean useDropoff,
+			final int zoom,
+			final String attributeName ) {
+		final List<Tuple2<Long, Tuple2<Double, Double>>> cells = new ArrayList<>();
+		final int numPosts = 1 << (zoom + TILE_SCALE);
+		Point pt = null;
+		if (s != null) {
+			final Object geomObj;
+			if (useDropoff) {
+				geomObj = s.getAttribute(NYCTLCUtils.Field.DROPOFF_LOCATION.getIndexedName());
+			}
+			else {
+				geomObj = s.getDefaultGeometry();
+			}
+			if ((geomObj != null) && (geomObj instanceof Geometry)) {
+				pt = ((Geometry) geomObj).getCentroid();
+				final Tuple2<Double, Double> coords = getTileCoordsFromLonLat(
+						new Tuple2<Double, Double>(
+								pt.getX(),
+								pt.getY()),
+						zoom + TILE_SCALE);
+				final double attrValue = ((Number) s.getAttribute(attributeName)).doubleValue();
+				GaussianFilter.incrementPtFast(
+						new double[] {
+							coords._1,
+							coords._2
+						},
+						new int[] {
+							numPosts,
+							numPosts,
+						},
+						new CellCounter() {
+							@Override
+							public void increment(
+									final long cellId,
+									final double weight ) {
+								cells.add(new Tuple2<Long, Tuple2<Double, Double>>(
+										cellId,
+										new Tuple2<Double, Double>(
+												weight,
+												weight * attrValue)));
+							}
+						});
 			}
 		}
 		return cells.iterator();

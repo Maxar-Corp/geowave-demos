@@ -23,7 +23,7 @@ import org.opengis.referencing.NoSuchAuthorityCodeException;
 import mil.nga.giat.geowave.process.nyctlc.SparkIngest.RowToFeature;
 import scala.Tuple2;
 
-public class SparkKDEFromS3
+public class SparkKDEFromS3InTMS
 {
 	public static void main(
 			final String[] args )
@@ -39,8 +39,13 @@ public class SparkKDEFromS3
 				.config(
 						"spark.kryo.registrator",
 						GeoWaveRegistrator.class.getCanonicalName())
+				// .config(
+				// "spark.sql.warehouse.dir",
+				// "file:///C:/Temp/spark-warehouse")
+				// .master(
+				// "local")
 				.getOrCreate();
-		final int year = 2013;
+		int year = 2013;
 		final List<String> paths = new ArrayList<>();
 		for (int month = 8; month <= 12; month++) {
 			paths.add(
@@ -49,40 +54,40 @@ public class SparkKDEFromS3
 							year,
 							month));
 		}
-		// for (year = 2014; year <= 2015; year++) {
-		// for (int month = 1; month <= 12; month++) {
-		// paths.add(
-		// String.format(
-		// "s3://nyc-tlc/trip data/green_tripdata_%04d-%02d.csv",
-		// year,
-		// month));
-		// }
-		// }
-		// year = 2016;
-		// for (int month = 1; month <= 6; month++) {
-		// paths.add(
-		// String.format(
-		// "s3://nyc-tlc/trip data/green_tripdata_%04d-%02d.csv",
-		// year,
-		// month));
-		// }
-		// for (year = 2009; year <= 2015; year++) {
-		// for (int month = 1; month <= 12; month++) {
-		// paths.add(
-		// String.format(
-		// "s3://nyc-tlc/trip data/yellow_tripdata_%04d-%02d.csv",
-		// year,
-		// month));
-		// }
-		// }
-		// year = 2016;
-		// for (int month = 1; month <= 6; month++) {
-		// paths.add(
-		// String.format(
-		// "s3://nyc-tlc/trip data/yellow_tripdata_%04d-%02d.csv",
-		// year,
-		// month));
-		// }
+		for (year = 2014; year <= 2015; year++) {
+			for (int month = 1; month <= 12; month++) {
+				paths.add(
+						String.format(
+								"s3://nyc-tlc/trip data/green_tripdata_%04d-%02d.csv",
+								year,
+								month));
+			}
+		}
+		year = 2016;
+		for (int month = 1; month <= 6; month++) {
+			paths.add(
+					String.format(
+							"s3://nyc-tlc/trip data/green_tripdata_%04d-%02d.csv",
+							year,
+							month));
+		}
+		for (year = 2009; year <= 2015; year++) {
+			for (int month = 1; month <= 12; month++) {
+				paths.add(
+						String.format(
+								"s3://nyc-tlc/trip data/yellow_tripdata_%04d-%02d.csv",
+								year,
+								month));
+			}
+		}
+		year = 2016;
+		for (int month = 1; month <= 6; month++) {
+			paths.add(
+					String.format(
+							"s3://nyc-tlc/trip data/yellow_tripdata_%04d-%02d.csv",
+							year,
+							month));
+		}
 		final Dataset<Row> df = spark
 				.read()
 				.format(
@@ -96,6 +101,8 @@ public class SparkKDEFromS3
 				.csv(
 						paths.toArray(
 								new String[] {}));
+
+		// "C:\\Users\\rfecher\\Downloads\\green_tripdata_2013-08.csv");
 		final int minLevel = Integer.parseInt(
 				args[0]);
 
@@ -117,14 +124,8 @@ public class SparkKDEFromS3
 		sfRdd.persist(
 				StorageLevel.MEMORY_AND_DISK());
 
-		for (int level = minLevel; level <= maxLevel; level++) {
-			final int pixelLevel = level + SparkKDE.TILE_SCALE;
-			final int numXPosts = (int) Math.pow(
-					2,
-					pixelLevel + 1);
-			final int numYPosts = (int) Math.pow(
-					2,
-					pixelLevel);
+		for (int zoom = minLevel; zoom <= maxLevel; zoom++) {
+			final int finalZoom = zoom;
 			final Function<Double, Double> identity = x -> x;
 
 			final Function2<Double, Double, Double> sum = (
@@ -132,10 +133,10 @@ public class SparkKDEFromS3
 					final Double y ) -> {
 				return x + y;
 			};
-			final PairFlatMapFunction<SimpleFeature, Long, Double> cellMapper = s -> SparkKDE.getCells(
+			final PairFlatMapFunction<SimpleFeature, Long, Double> cellMapper = s -> SparkKDE.getTMSCells(
 					s,
-					numXPosts,
-					numYPosts);
+					false,
+					finalZoom);
 			final PairFunction<Tuple2<Long, Double>, Double, Long> swap = i -> i.swap();
 			final JavaPairRDD<Double, Long> rdd = sfRdd
 					.flatMapToPair(
@@ -148,13 +149,14 @@ public class SparkKDEFromS3
 							swap)
 					.sortByKey();
 
-			final long count = rdd.cache().count();
+			final long count = rdd.cache().count() - 1;
 			final PairFunction<Tuple2<Tuple2<Double, Long>, Long>, Long, Double> calculatePercentile = t -> {
 				final double percentile = (double) t._2 / (double) count;
 				return new Tuple2<Long, Double>(
 						t._1._2,
 						percentile);
 			};
+			// final JavaPairRDD<Long, Double> newRdd = rdd
 			rdd
 					.zipWithIndex()
 					.mapToPair(
@@ -162,7 +164,9 @@ public class SparkKDEFromS3
 					.repartition(
 							1)
 					.saveAsObjectFile(
-							args[2] + "_" + level);
+							args[2]);
+			// newRdd.saveAsTextFile("C:\\Temp\\rdd.txt");
+			// SparkTMSFromS3InTMS.renderTMS(zoom, newRdd, "");
 		}
 		sfRdd.unpersist(
 				true);

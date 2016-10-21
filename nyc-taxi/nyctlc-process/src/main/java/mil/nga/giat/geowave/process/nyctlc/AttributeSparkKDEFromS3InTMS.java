@@ -23,7 +23,7 @@ import org.opengis.referencing.NoSuchAuthorityCodeException;
 import mil.nga.giat.geowave.process.nyctlc.SparkIngest.RowToFeature;
 import scala.Tuple2;
 
-public class SparkKDEFromS3
+public class AttributeSparkKDEFromS3InTMS
 {
 	public static void main(
 			final String[] args )
@@ -39,10 +39,15 @@ public class SparkKDEFromS3
 				.config(
 						"spark.kryo.registrator",
 						GeoWaveRegistrator.class.getCanonicalName())
+				// .config(
+				// "spark.sql.warehouse.dir",
+				// "file:///C:/Temp/spark-warehouse")
+				// .master(
+				// "local")
 				.getOrCreate();
 		final int year = 2013;
 		final List<String> paths = new ArrayList<>();
-		for (int month = 8; month <= 12; month++) {
+		for (int month = 8; month <= 10; month++) {
 			paths.add(
 					String.format(
 							"s3://nyc-tlc/trip data/green_tripdata_%04d-%02d.csv",
@@ -96,6 +101,8 @@ public class SparkKDEFromS3
 				.csv(
 						paths.toArray(
 								new String[] {}));
+
+		// "C:\\Users\\rfecher\\Downloads\\green_tripdata_2013-08.csv");
 		final int minLevel = Integer.parseInt(
 				args[0]);
 
@@ -117,26 +124,26 @@ public class SparkKDEFromS3
 		sfRdd.persist(
 				StorageLevel.MEMORY_AND_DISK());
 
-		for (int level = minLevel; level <= maxLevel; level++) {
-			final int pixelLevel = level + SparkKDE.TILE_SCALE;
-			final int numXPosts = (int) Math.pow(
-					2,
-					pixelLevel + 1);
-			final int numYPosts = (int) Math.pow(
-					2,
-					pixelLevel);
-			final Function<Double, Double> identity = x -> x;
+		for (int zoom = minLevel; zoom <= maxLevel; zoom++) {
+			final int finalZoom = zoom;
+			final Function<Tuple2<Double, Double>, Tuple2<Double, Double>> identity = x -> x;
 
-			final Function2<Double, Double, Double> sum = (
-					final Double x,
-					final Double y ) -> {
-				return x + y;
+			final Function2<Tuple2<Double, Double>, Tuple2<Double, Double>, Tuple2<Double, Double>> sum = (
+					final Tuple2<Double, Double> x,
+					final Tuple2<Double, Double> y ) -> {
+				return new Tuple2<Double, Double>(
+						x._1 + y._1,
+						x._2 + y._2);
 			};
-			final PairFlatMapFunction<SimpleFeature, Long, Double> cellMapper = s -> SparkKDE.getCells(
-					s,
-					numXPosts,
-					numYPosts);
-			final PairFunction<Tuple2<Long, Double>, Double, Long> swap = i -> i.swap();
+			final PairFlatMapFunction<SimpleFeature, Long, Tuple2<Double, Double>> cellMapper = s -> SparkKDE
+					.getTMSCellsWithAttribute(
+							s,
+							false,
+							finalZoom,
+							args[3]);
+			final PairFunction<Tuple2<Long, Tuple2<Double, Double>>, Double, Long> avgAttribute = i -> new Tuple2<>(
+					i._2._2 / i._2._1,
+					i._1);
 			final JavaPairRDD<Double, Long> rdd = sfRdd
 					.flatMapToPair(
 							cellMapper)
@@ -145,10 +152,10 @@ public class SparkKDEFromS3
 							sum,
 							sum)
 					.mapToPair(
-							swap)
+							avgAttribute)
 					.sortByKey();
 
-			final long count = rdd.cache().count();
+			final long count = rdd.cache().count() - 1;
 			final PairFunction<Tuple2<Tuple2<Double, Long>, Long>, Long, Double> calculatePercentile = t -> {
 				final double percentile = (double) t._2 / (double) count;
 				return new Tuple2<Long, Double>(
@@ -162,7 +169,7 @@ public class SparkKDEFromS3
 					.repartition(
 							1)
 					.saveAsObjectFile(
-							args[2] + "_" + level);
+							args[2] + "_" + finalZoom);
 		}
 		sfRdd.unpersist(
 				true);
