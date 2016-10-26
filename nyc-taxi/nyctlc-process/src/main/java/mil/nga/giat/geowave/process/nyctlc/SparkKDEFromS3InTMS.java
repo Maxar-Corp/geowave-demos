@@ -12,7 +12,6 @@ import org.apache.spark.api.java.function.PairFunction;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
-import org.apache.spark.storage.StorageLevel;
 import org.geotools.filter.text.cql2.CQL;
 import org.geotools.filter.text.cql2.CQLException;
 import org.opengis.feature.simple.SimpleFeature;
@@ -81,7 +80,7 @@ public class SparkKDEFromS3InTMS
 			}
 		}
 		year = 2016;
-		for (int month = 1; month <= 6; month++) {
+		for (int month = 5; month <= 6; month++) {
 			paths.add(
 					String.format(
 							"s3://nyc-tlc/trip data/yellow_tripdata_%04d-%02d.csv",
@@ -121,56 +120,66 @@ public class SparkKDEFromS3InTMS
 					new CQLFilterFunction(
 							cqlFilterStr));
 		}
-		sfRdd.persist(
-				StorageLevel.MEMORY_AND_DISK());
+		final Function<Double, Double> identity = x -> x;
 
+		final Function2<Double, Double, Double> sum = (
+				final Double x,
+				final Double y ) -> {
+			return x + y;
+		};
+		final PairFlatMapFunction<SimpleFeature, Tuple2<Integer, Long>, Double> cellMapper = s -> SparkKDE.getTMSCells(
+				s,
+				false,
+				minLevel,
+				maxLevel);
+		final JavaPairRDD<Tuple2<Integer, Long>, Double> rdd = sfRdd.flatMapToPair(
+				cellMapper).combineByKey(
+						identity,
+						sum,
+						sum).cache();
 		for (int zoom = minLevel; zoom <= maxLevel; zoom++) {
-			final int finalZoom = zoom;
-			final Function<Double, Double> identity = x -> x;
-
-			final Function2<Double, Double, Double> sum = (
-					final Double x,
-					final Double y ) -> {
-				return x + y;
-			};
-			final PairFlatMapFunction<SimpleFeature, Long, Double> cellMapper = s -> SparkKDE.getTMSCells(
-					s,
-					false,
-					finalZoom);
-			final PairFunction<Tuple2<Long, Double>, Double, Long> swap = i -> i.swap();
-			final JavaPairRDD<Double, Long> rdd = sfRdd
-					.flatMapToPair(
-							cellMapper)
-					.combineByKey(
-							identity,
-							sum,
-							sum)
-					.mapToPair(
-							swap)
-					.sortByKey();
-
-			final long count = rdd.cache().count() - 1;
+			final JavaPairRDD<Double, Long> levelRdd = getRDDByLevel(
+					rdd,
+					zoom).sortByKey();
+			final long count = levelRdd.cache().count() - 1;
 			final PairFunction<Tuple2<Tuple2<Double, Long>, Long>, Long, Double> calculatePercentile = t -> {
 				final double percentile = (double) t._2 / (double) count;
 				return new Tuple2<Long, Double>(
 						t._1._2,
 						percentile);
 			};
-			// final JavaPairRDD<Long, Double> newRdd = rdd
-			rdd
+			levelRdd
 					.zipWithIndex()
 					.mapToPair(
 							calculatePercentile)
 					.repartition(
 							1)
 					.saveAsObjectFile(
-							args[2]);
-			// newRdd.saveAsTextFile("C:\\Temp\\rdd.txt");
-			// SparkTMSFromS3InTMS.renderTMS(zoom, newRdd, "");
+							args[2] + "_" + zoom);
+			levelRdd.unpersist(false);
 		}
-		sfRdd.unpersist(
-				true);
+
+		// final JavaPairRDD<Long, Double> newRdd = rdd
+
+		// newRdd.saveAsTextFile("C:\\Temp\\rdd.txt");
+		// SparkTMSFromS3InTMS.renderTMS(zoom, newRdd, "");
+		// sfRdd.unpersist(
+		// true);
 		spark.stop();
+	}
+
+	private static JavaPairRDD<Double, Long> getRDDByLevel(
+			final JavaPairRDD<Tuple2<Integer, Long>, Double> pairRDD,
+			final Integer level ) {
+		final PairFunction<Tuple2<Tuple2<Integer, Long>, Double>, Double, Long> swap = i -> new Tuple2<>(
+				i._2,
+				i._1._2);
+		return pairRDD
+				.filter(
+						v -> v._1._1.equals(
+								level))
+				.mapToPair(
+						swap);
 	}
 
 	private static class CQLFilterFunction implements

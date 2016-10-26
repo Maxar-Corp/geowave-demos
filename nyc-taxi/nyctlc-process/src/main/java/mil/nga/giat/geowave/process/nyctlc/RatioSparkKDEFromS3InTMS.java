@@ -12,7 +12,6 @@ import org.apache.spark.api.java.function.PairFunction;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
-import org.apache.spark.storage.StorageLevel;
 import org.geotools.filter.text.cql2.CQL;
 import org.geotools.filter.text.cql2.CQLException;
 import org.opengis.feature.simple.SimpleFeature;
@@ -39,55 +38,55 @@ public class RatioSparkKDEFromS3InTMS
 				.config(
 						"spark.kryo.registrator",
 						GeoWaveRegistrator.class.getCanonicalName())
-//				 .config(
-//				 "spark.sql.warehouse.dir",
-//				 "file:///C:/Temp/spark-warehouse")
-//				 .master(
-//				 "local")
+				// .config(
+				// "spark.sql.warehouse.dir",
+				// "file:///C:/Temp/spark-warehouse")
+				// .master(
+				// "local")
 				.getOrCreate();
-		final int year = 2013;
+		int year = 2013;
 		final List<String> paths = new ArrayList<>();
-		for (int month = 8; month <= 10; month++) {
+//		for (int month = 8; month <= 10; month++) {
+//			paths.add(
+//					String.format(
+//							"s3://nyc-tlc/trip data/green_tripdata_%04d-%02d.csv",
+//							year,
+//							month));
+//		}
+//		for (year = 2014; year <= 2015; year++) {
+//			for (int month = 1; month <= 12; month++) {
+//				paths.add(
+//						String.format(
+//								"s3://nyc-tlc/trip data/green_tripdata_%04d-%02d.csv",
+//								year,
+//								month));
+//			}
+//		}
+//		year = 2016;
+//		for (int month = 1; month <= 6; month++) {
+//			paths.add(
+//					String.format(
+//							"s3://nyc-tlc/trip data/green_tripdata_%04d-%02d.csv",
+//							year,
+//							month));
+//		}
+//		for (year = 2009; year <= 2015; year++) {
+//			for (int month = 1; month <= 12; month++) {
+//				paths.add(
+//						String.format(
+//								"s3://nyc-tlc/trip data/yellow_tripdata_%04d-%02d.csv",
+//								year,
+//								month));
+//			}
+//		}
+		year = 2016;
+		for (int month = 1; month <= 6; month++) {
 			paths.add(
 					String.format(
-							"s3://nyc-tlc/trip data/green_tripdata_%04d-%02d.csv",
+							"s3://nyc-tlc/trip data/yellow_tripdata_%04d-%02d.csv",
 							year,
 							month));
 		}
-		// for (year = 2014; year <= 2015; year++) {
-		// for (int month = 1; month <= 12; month++) {
-		// paths.add(
-		// String.format(
-		// "s3://nyc-tlc/trip data/green_tripdata_%04d-%02d.csv",
-		// year,
-		// month));
-		// }
-		// }
-		// year = 2016;
-		// for (int month = 1; month <= 6; month++) {
-		// paths.add(
-		// String.format(
-		// "s3://nyc-tlc/trip data/green_tripdata_%04d-%02d.csv",
-		// year,
-		// month));
-		// }
-		// for (year = 2009; year <= 2015; year++) {
-		// for (int month = 1; month <= 12; month++) {
-		// paths.add(
-		// String.format(
-		// "s3://nyc-tlc/trip data/yellow_tripdata_%04d-%02d.csv",
-		// year,
-		// month));
-		// }
-		// }
-		// year = 2016;
-		// for (int month = 1; month <= 6; month++) {
-		// paths.add(
-		// String.format(
-		// "s3://nyc-tlc/trip data/yellow_tripdata_%04d-%02d.csv",
-		// year,
-		// month));
-		// }
 		final Dataset<Row> df = spark
 				.read()
 				.format(
@@ -102,7 +101,7 @@ public class RatioSparkKDEFromS3InTMS
 						paths.toArray(
 								new String[] {}));
 
-//						 "C:\\Users\\rfecher\\Downloads\\green_tripdata_2013-08.csv");
+		// "C:\\Users\\rfecher\\Downloads\\green_tripdata_2013-08.csv");
 		final int minLevel = Integer.parseInt(
 				args[0]);
 
@@ -121,94 +120,122 @@ public class RatioSparkKDEFromS3InTMS
 					new CQLFilterFunction(
 							cqlFilterStr));
 		}
-		sfRdd.persist(
-				StorageLevel.MEMORY_AND_DISK());
+		final Function<Double, Double> identity = x -> x;
 
+		final Function2<Double, Double, Double> sum = (
+				final Double x,
+				final Double y ) -> {
+			return x + y;
+		};
+		final PairFlatMapFunction<SimpleFeature, Tuple2<Integer, Long>, Double> pickupCellMapper = s -> SparkKDE
+				.getTMSCells(
+						s,
+						false,
+						minLevel,
+						maxLevel);
+		final PairFlatMapFunction<SimpleFeature, Tuple2<Integer, Long>, Double> dropOfffCellMapper = s -> SparkKDE
+				.getTMSCells(
+						s,
+						true,
+						minLevel,
+						maxLevel);
+		final JavaPairRDD<Tuple2<Integer, Long>, Double> rddPickups = sfRdd
+				.flatMapToPair(
+						pickupCellMapper)
+				.combineByKey(
+						identity,
+						sum,
+						sum)
+				.cache();
+		final JavaPairRDD<Tuple2<Integer, Long>, Double> rddDropOffs = sfRdd
+				.flatMapToPair(
+						dropOfffCellMapper)
+				.combineByKey(
+						identity,
+						sum,
+						sum)
+				.cache();
 		for (int zoom = minLevel; zoom <= maxLevel; zoom++) {
 			final int finalZoom = zoom;
-			final Function<Double, Double> identity = x -> x;
+			final JavaPairRDD<Double, Long> levelPickupRdd = getRDDByLevel(
+					rddPickups,
+					zoom);
+			final JavaPairRDD<Double, Long> levelDropoffRdd = getRDDByLevel(
+					rddDropOffs,
+					zoom);
 
-			final Function2<Double, Double, Double> sum = (
-					final Double x,
-					final Double y ) -> {
-				return x + y;
-			};
-			final PairFlatMapFunction<SimpleFeature, Long, Double> pickupCellMapper = s -> SparkKDE.getTMSCells(
-					s,
-					false,
-					finalZoom);
-			final PairFlatMapFunction<SimpleFeature, Long, Double> dropOfffCellMapper = s -> SparkKDE.getTMSCells(
-					s,
-					true,
-					finalZoom);
-			final PairFunction<Tuple2<Long, Double>, Double, Long> swap = i -> i.swap();
-			final JavaPairRDD<Double, Long> rddPickups = sfRdd
-					.flatMapToPair(
-							pickupCellMapper)
-					.combineByKey(
-							identity,
-							sum,
-							sum)
-					.mapToPair(
-							swap)
-					.sortByKey();
-			final JavaPairRDD<Double, Long> rddDropOffs = sfRdd
-					.flatMapToPair(
-							dropOfffCellMapper)
-					.combineByKey(
-							identity,
-							sum,
-							sum)
-					.mapToPair(
-							swap)
-					.sortByKey();
-
-			final long pickupCount = rddPickups.cache().count() - 1;
+			final long pickupCount = levelPickupRdd.cache().count() - 1;
 			final PairFunction<Tuple2<Tuple2<Double, Long>, Long>, Long, Double> calculatePercentilePickup = t -> {
 				final double percentile = (double) t._2 / (double) pickupCount;
 				return new Tuple2<Long, Double>(
 						t._1._2,
 						percentile);
 			};
-			final JavaPairRDD<Long,Double> finalRddPickups =  rddPickups
-					.zipWithIndex()
-					.mapToPair(
-							calculatePercentilePickup);
-			final long dropoffCount = rddDropOffs.cache().count() - 1;
-			final PairFunction<Tuple2<Tuple2<Double, Long>, Long>, Long, Double> calculatePercentileDropoff= t -> {
+			final JavaPairRDD<Long, Double> finalRddPickups = levelPickupRdd.sortByKey().zipWithIndex().mapToPair(
+					calculatePercentilePickup);
+			final long dropoffCount = levelDropoffRdd.cache().count() - 1;
+			final PairFunction<Tuple2<Tuple2<Double, Long>, Long>, Long, Double> calculatePercentileDropoff = t -> {
 				final double percentile = (double) t._2 / (double) dropoffCount;
 				return new Tuple2<Long, Double>(
 						t._1._2,
 						percentile);
 			};
-			final JavaPairRDD<Long,Double> finalRddDropOffs = rddDropOffs
-			.zipWithIndex()
-			.mapToPair(
+			final JavaPairRDD<Long, Double> finalRddDropOffs = levelDropoffRdd.sortByKey().zipWithIndex().mapToPair(
 					calculatePercentileDropoff);
-			final PairFunction<Tuple2<Long,Tuple2<Double, Double>>, Double, Long> calculateRatio = t -> {
-				final double ratio = (double) t._2._1 / (double) t._2._2;
+			final PairFunction<Tuple2<Long, Tuple2<Double, Double>>, Double, Long> calculateRatio = t -> {
+				final double ratio = t._2._1 - t._2._2;
 				return new Tuple2<Double, Long>(
 						ratio,
 						t._1);
 			};
-			final JavaPairRDD<Double, Long> ratioRdd = finalRddDropOffs.join(finalRddPickups).mapToPair(calculateRatio).sortByKey();
+			final Function<Tuple2<Long, Tuple2<Double, Double>>, Boolean> fivePercentFilter = t -> ((t._2._1 > 0.05)
+					&& (t._2._2 > 0.05));
+			final JavaPairRDD<Double, Long> ratioRdd = finalRddDropOffs
+					.join(
+							finalRddPickups)
+					.filter(
+							fivePercentFilter)
+					.mapToPair(
+							calculateRatio)
+					.sortByKey();
 
 			final long ratioCount = ratioRdd.cache().count() - 1;
-			final PairFunction<Tuple2<Tuple2<Double, Long>, Long>, Long, Double> calculatePercentileRatio= t -> {
+			final PairFunction<Tuple2<Tuple2<Double, Long>, Long>, Long, Double> calculatePercentileRatio = t -> {
 				final double percentile = (double) t._2 / (double) ratioCount;
 				return new Tuple2<Long, Double>(
 						t._1._2,
 						percentile);
 			};
-			ratioRdd.zipWithIndex().mapToPair(calculatePercentileRatio)
+			ratioRdd
+					.zipWithIndex()
+					.mapToPair(
+							calculatePercentileRatio)
 					.repartition(
 							1)
 					.saveAsObjectFile(
 							args[2] + "_" + finalZoom);
+			// newRdd.saveAsTextFile("C:\\Temp\\rdd_" + zoom);
+			// SparkTMSFromS3InTMS.renderTMS(
+			// zoom,
+			// newRdd,
+			// "");
 		}
-		sfRdd.unpersist(
-				true);
 		spark.stop();
+
+	}
+
+	private static JavaPairRDD<Double, Long> getRDDByLevel(
+			final JavaPairRDD<Tuple2<Integer, Long>, Double> pairRDD,
+			final Integer level ) {
+		final PairFunction<Tuple2<Tuple2<Integer, Long>, Double>, Double, Long> swap = i -> new Tuple2<>(
+				i._2,
+				i._1._2);
+		return pairRDD
+				.filter(
+						v -> v._1._1.equals(
+								level))
+				.mapToPair(
+						swap);
 	}
 
 	private static class CQLFilterFunction implements

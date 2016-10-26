@@ -129,6 +129,11 @@ public class BreakpointColorRamp
 		}
 	}
 
+	public static void main(
+			String[] args ) {
+
+	}
+
 	private Breakpoint getBreakpoint(
 			final int minColorIndex,
 			final double value ) {
@@ -158,15 +163,16 @@ public class BreakpointColorRamp
 							0,
 							0));
 		}
-		final double alpha = ((minBP.getColor().getAlpha() * fraction) + (maxBP.getColor().getAlpha() * (1 - fraction))) / 255;
+		final double alpha = ((minBP.getColor().getAlpha() * (1.0 - fraction)) + (maxBP.getColor().getAlpha() * fraction)) / 255.0;
+
 		return new Breakpoint(
 				minColorIndex + fraction,
 				ColorUtils.getAlphaedColor(
-						ColorUtils.interpolateHSV(
+						ColorUtils.interpolateRGB(
 								minBP.getColor(),
 								maxBP.getColor(),
 								fraction),
-						alpha));
+						1.0));
 	}
 
 	public double getValue(

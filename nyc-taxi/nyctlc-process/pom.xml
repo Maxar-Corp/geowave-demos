@@ -12,6 +12,11 @@
 	<name>GeoWave NYC TLC Processing Support</name>
 	<description>GeoWave process and analytic support for New York City Taxi and Limousine Commission dataset</description>
 	<dependencies>
+	   <dependency>
+          <groupId>com.tdunning</groupId>
+          <artifactId>t-digest</artifactId>
+          <version>3.1</version>
+      </dependency>
 		<dependency> <!-- Spark dependency -->
 			<groupId>org.apache.spark</groupId>
 			<artifactId>spark-core_2.11</artifactId>

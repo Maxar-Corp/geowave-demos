@@ -434,97 +434,125 @@ public class SparkKDE
 		return cells.iterator();
 	}
 
-	public static Iterator<Tuple2<Long, Double>> getTMSCells(
+	public static Iterator<Tuple2<Tuple2<Integer, Long>, Double>> getTMSCells(
 			final SimpleFeature s,
 			final boolean useDropoff,
-			final int zoom ) {
-		final List<Tuple2<Long, Double>> cells = new ArrayList<>();
-		final int numPosts = 1 << (zoom + TILE_SCALE);
-		Point pt = null;
-		if (s != null) {
-			final Object geomObj;
-			if (useDropoff) {
-				geomObj = s.getAttribute(NYCTLCUtils.Field.DROPOFF_LOCATION.getIndexedName());
-			}
-			else {
-				geomObj = s.getDefaultGeometry();
-			}
-			if ((geomObj != null) && (geomObj instanceof Geometry)) {
-				pt = ((Geometry) geomObj).getCentroid();
-				final Tuple2<Double, Double> coords = getTileCoordsFromLonLat(
-						new Tuple2<Double, Double>(
-								pt.getX(),
-								pt.getY()),
-						zoom + TILE_SCALE);
-				GaussianFilter.incrementPtFast(
-						new double[] {
-							coords._1,
-							coords._2
-						},
-						new int[] {
-							numPosts,
-							numPosts,
-						},
-						new CellCounter() {
-							@Override
-							public void increment(
-									final long cellId,
-									final double weight ) {
-								cells.add(new Tuple2<Long, Double>(
-										cellId,
-										weight));
-							}
-						});
+			final int minZoom,
+			final int maxZoom ) {
+		final List<Tuple2<Tuple2<Integer, Long>, Double>> cells = new ArrayList<>();
+		for (int zoom = minZoom; zoom <= maxZoom; zoom++) {
+			final int finalZoom = zoom;
+			final int numPosts = 1 << (zoom + TILE_SCALE);
+			Point pt = null;
+			if (s != null) {
+				final Object geomObj;
+				if (useDropoff) {
+					geomObj = s.getAttribute(NYCTLCUtils.Field.DROPOFF_LOCATION.getIndexedName());
+				}
+				else {
+					geomObj = s.getDefaultGeometry();
+				}
+				if ((geomObj != null) && (geomObj instanceof Geometry)) {
+					pt = ((Geometry) geomObj).getCentroid();
+					final Tuple2<Double, Double> coords = getTileCoordsFromLonLat(
+							new Tuple2<Double, Double>(
+									pt.getX(),
+									pt.getY()),
+							zoom + TILE_SCALE);
+					GaussianFilter.incrementPtFast(
+							new double[] {
+								coords._1,
+								coords._2
+							},
+							new int[] {
+								numPosts,
+								numPosts,
+							},
+							new CellCounter() {
+								@Override
+								public void increment(
+										final long cellId,
+										final double weight ) {
+									cells.add(new Tuple2<Tuple2<Integer, Long>, Double>(
+											new Tuple2<>(
+													finalZoom,
+													cellId),
+											weight));
+								}
+							});
+				}
 			}
 		}
 		return cells.iterator();
 	}
 
-	public static Iterator<Tuple2<Long, Tuple2<Double, Double>>> getTMSCellsWithAttribute(
+	public static Iterator<Tuple2<Tuple2<Integer, Long>, Tuple2<Double, Double>>> getTMSCellsWithAttribute(
 			final SimpleFeature s,
 			final boolean useDropoff,
-			final int zoom,
-			final String attributeName ) {
-		final List<Tuple2<Long, Tuple2<Double, Double>>> cells = new ArrayList<>();
-		final int numPosts = 1 << (zoom + TILE_SCALE);
-		Point pt = null;
-		if (s != null) {
-			final Object geomObj;
-			if (useDropoff) {
-				geomObj = s.getAttribute(NYCTLCUtils.Field.DROPOFF_LOCATION.getIndexedName());
-			}
-			else {
-				geomObj = s.getDefaultGeometry();
-			}
-			if ((geomObj != null) && (geomObj instanceof Geometry)) {
-				pt = ((Geometry) geomObj).getCentroid();
-				final Tuple2<Double, Double> coords = getTileCoordsFromLonLat(
-						new Tuple2<Double, Double>(
-								pt.getX(),
-								pt.getY()),
-						zoom + TILE_SCALE);
-				final double attrValue = ((Number) s.getAttribute(attributeName)).doubleValue();
-				GaussianFilter.incrementPtFast(
-						new double[] {
-							coords._1,
-							coords._2
-						},
-						new int[] {
-							numPosts,
-							numPosts,
-						},
-						new CellCounter() {
-							@Override
-							public void increment(
-									final long cellId,
-									final double weight ) {
-								cells.add(new Tuple2<Long, Tuple2<Double, Double>>(
-										cellId,
-										new Tuple2<Double, Double>(
-												weight,
-												weight * attrValue)));
-							}
-						});
+			final int minZoom,
+			final int maxZoom,
+			final String attributeName,
+			final TDigestSerializable td ) {
+		final List<Tuple2<Tuple2<Integer, Long>, Tuple2<Double, Double>>> cells = new ArrayList<>();
+		for (int zoom = minZoom; zoom <= maxZoom; zoom++) {
+			final int finalZoom = zoom;
+			final int numPosts = 1 << (zoom + TILE_SCALE);
+			Point pt = null;
+			if (s != null) {
+				final Object geomObj;
+				if (useDropoff) {
+					geomObj = s.getAttribute(NYCTLCUtils.Field.DROPOFF_LOCATION.getIndexedName());
+				}
+				else {
+					geomObj = s.getDefaultGeometry();
+				}
+				if ((geomObj != null) && (geomObj instanceof Geometry)) {
+					pt = ((Geometry) geomObj).getCentroid();
+					final Tuple2<Double, Double> coords = getTileCoordsFromLonLat(
+							new Tuple2<Double, Double>(
+									pt.getX(),
+									pt.getY()),
+							zoom + TILE_SCALE);
+					final Object o = s.getAttribute(attributeName);
+					if ((o != null) && (o instanceof Number)) {
+						final double attrValue = ((Number) o).doubleValue();
+						final boolean isInteger = (!((o instanceof Float) || (o instanceof Double)));
+						GaussianFilter.incrementPtFast(
+								new double[] {
+									coords._1,
+									coords._2
+								},
+								new int[] {
+									numPosts,
+									numPosts,
+								},
+								new CellCounter() {
+									@Override
+									public void increment(
+											final long cellId,
+											final double weight ) {
+										final double cdf;
+										if (isInteger) {
+											// its not continous, let's average
+											// the cdf to avoid a problem with
+											// too few unique values
+
+											cdf = (td.cdf(attrValue) + td.cdf(attrValue - 1)) / 2;
+										}
+										else {
+											cdf = td.cdf(attrValue);
+										}
+										cells.add(new Tuple2<Tuple2<Integer, Long>, Tuple2<Double, Double>>(
+												new Tuple2<Integer, Long>(
+														finalZoom,
+														cellId),
+												new Tuple2<Double, Double>(
+														weight,
+														weight * ((2 * cdf) - 1))));
+									}
+								});
+					}
+				}
 			}
 		}
 		return cells.iterator();
