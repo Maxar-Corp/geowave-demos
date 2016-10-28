@@ -172,7 +172,7 @@ public class BreakpointColorRamp
 								minBP.getColor(),
 								maxBP.getColor(),
 								fraction),
-						1.0));
+						alpha));
 	}
 
 	public double getValue(

@@ -11,8 +11,8 @@ import java.util.List;
 
 import javax.imageio.ImageIO;
 
-import org.apache.spark.SparkContext;
 import org.apache.spark.api.java.JavaPairRDD;
+import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function;
 import org.apache.spark.api.java.function.Function2;
 import org.apache.spark.api.java.function.PairFunction;
@@ -27,61 +27,203 @@ import com.amazonaws.services.s3.model.PutObjectRequest;
 import mil.nga.giat.geowave.process.nyctlc.BreakpointColorRamp.Breakpoint;
 import scala.Tuple2;
 import scala.Tuple3;
-import scala.reflect.ClassTag;
 
-public class SparkTMSFromS3InTMS
+public class WeightsToTMS
 {
-	private static final BreakpointColorRamp DIVERGENT_RAMP = getDivergentColorMap();
-	// private static final BreakpointColorRamp QUALITATIVE_RAMP =
-	// getDivergentColorMap();
-	private static final BreakpointColorRamp SEQUENTIAL_RAMP = getColorRamp();
-
-	public static enum RampType {
-		DIVERGENT(
-				DIVERGENT_RAMP),
-		SEQUENTIAL(
-				SEQUENTIAL_RAMP);
-		BreakpointColorRamp ramp;
-
-		private RampType(
-				final BreakpointColorRamp ramp ) {
-			this.ramp = ramp;
-		}
-
-		public static RampType fromString(
-				final String str ) {
-			return RampType.valueOf(str.toUpperCase());
-		}
-	}
+	private static final BreakpointColorRamp ramp = getDivergentColorMap();
 
 	public static void main(
 			final String[] args ) {
-		final SparkContext sc = new SparkContext();
-		final int minLevel = Integer.parseInt(args[0]);
+		try (final JavaSparkContext sc = new JavaSparkContext()) {
+			final int minLevel = Integer.parseInt(args[0]);
 
-		final int maxLevel = Integer.parseInt(args[1]);
-		for (int zoom = minLevel; zoom <= maxLevel; zoom++) {
-			final JavaPairRDD<Long, Double> rdd = JavaPairRDD.fromRDD(
-					sc.objectFile(
-							args[3] + "_" + zoom,
-							sc.defaultMinPartitions(),
-							(ClassTag) scala.reflect.ClassTag$.MODULE$.apply(Tuple2.class)),
-					(ClassTag) scala.reflect.ClassTag$.MODULE$.apply(Long.class),
-					(ClassTag) scala.reflect.ClassTag$.MODULE$.apply(Double.class));
+			final int maxLevel = Integer.parseInt(args[1]);
+			final int minYear = Integer.parseInt(args[2]);
 
-			renderTMS(
-					zoom,
-					rdd,
-					args[4],
-					args[2]);
+			final int maxYear = Integer.parseInt(args[3]);
+			final String dataType = args[4];
+			final String taxiType = args[5];
+			final String locationType = args[6];
+			final String[] filters = args[7].split(",");
+			final String[] taxiTypes = taxiType.equals("both") ? new String[] {
+				"green",
+				"yellow"
+			} : new String[] {
+				taxiType
+			};
+			final String[] locationTypes = locationType.equals("both") ? new String[] {
+				"pickup",
+				"dropoff"
+			} : new String[] {
+				locationType
+			};
+			final String rootKDEDir = args[8].endsWith("/") ? args[8] : args[8] + "/";
+			for (int zoom = minLevel; zoom <= maxLevel; zoom++) {
+				final JavaPairRDD<Long, Double> percentileRdd = getPercentileCombinedRdd(
+						rootKDEDir,
+						taxiTypes,
+						locationTypes,
+						filters,
+						minYear,
+						maxYear,
+						dataType,
+						zoom,
+						sc);
+				SparkTMSFromS3InTMS.renderTMS(
+						zoom,
+						percentileRdd,
+						args[9],
+						args[10]);
+				percentileRdd.unpersist(false);
+			}
+			sc.stop();
 		}
+	}
+
+	public static JavaPairRDD<Long, Double> getPercentileCombinedRdd(
+			final String rootKDEDir,
+			final String[] taxiTypes,
+			final String[] locationTypes,
+			final String[] filters,
+			final int minYear,
+			final int maxYear,
+			final String dataType,
+			final int zoom,
+			final JavaSparkContext sc ) {
+		return getPercentileRDD(getCombinedRdd(
+				rootKDEDir,
+				taxiTypes,
+				locationTypes,
+				filters,
+				minYear,
+				maxYear,
+				dataType,
+				zoom,
+				sc));
+	}
+
+	public static JavaPairRDD<Long, Double> getCombinedRdd(
+			final String rootKDEDir,
+			final String[] taxiTypes,
+			final String[] locationTypes,
+			final String[] filters,
+			final int minYear,
+			final int maxYear,
+			final String dataType,
+			final int zoom,
+			final JavaSparkContext sc ) {
+		final Function<Double, Double> identity = x -> x;
+
+		final Function2<Double, Double, Double> sum = (
+				final Double x,
+				final Double y ) -> {
+			return x + y;
+		};
+		JavaPairRDD<Long, Double> rdd = null;
+		for (int year = minYear; year <= maxYear; year++) {
+			for (final String taxi : taxiTypes) {
+				if (taxi.equals(
+						"green") && (year < 2013)) {
+					continue;
+				}
+				for (final String location : locationTypes) {
+					for (final String f : filters) {
+						if (rdd == null) {
+							rdd = getRDD(
+									rootKDEDir,
+									taxi,
+									year,
+									zoom,
+									location,
+									f,
+									dataType,
+									sc);
+						}
+						else {
+							rdd = getRDD(
+									rootKDEDir,
+									taxi,
+									year,
+									zoom,
+									location,
+									f,
+									dataType,
+									sc).union(
+											rdd).combineByKey(
+													identity,
+													sum,
+													sum);
+						}
+					}
+				}
+			}
+		}
+
+		return rdd;
+	}
+
+	public static JavaPairRDD<Long, Double> getPercentileRDD(
+			final JavaPairRDD<Long, Double> rdd ) {
+		final TDigestSerializable tdigest = rdd.cache().aggregate(
+				new TDigestSerializable(),
+				(
+						final TDigestSerializable td,
+						final Tuple2<Long, Double> t ) -> {
+					td.tdigest.add(
+							t._2);
+					return td;
+				},
+				(
+						final TDigestSerializable td1,
+						final TDigestSerializable td2 ) -> {
+					td1.tdigest.add(
+							td2.tdigest);
+					return td1;
+				});
+		final JavaPairRDD<Long, Double> percentileRdd = rdd.mapToPair(
+				(
+						final Tuple2<Long, Double> t ) -> {
+					return new Tuple2<Long, Double>(
+							t._1,
+							tdigest.tdigest.cdf(
+									t._2));
+				});
+		rdd.unpersist(
+				false);
+		return percentileRdd;
+	}
+
+	public static JavaPairRDD<Long, Double> getRDD(
+			final String rootKDEDir,
+			final String taxiType,
+			final int year,
+			final int zoom,
+			final String locationType,
+			final String filter,
+			final String dataType,
+			final JavaSparkContext sc ) {
+		final String objPath = rootKDEDir + year + "/" + taxiType + "/" + filter + "/" + locationType + "/" + zoom;
+		final JavaPairRDD<Long, NYCTLCData> pairRDD = JavaPairRDD.fromJavaRDD(sc.objectFile(objPath));
+		return getRDDByDataType(
+				pairRDD,
+				dataType);
+	}
+
+	private static JavaPairRDD<Long, Double> getRDDByDataType(
+			final JavaPairRDD<Long, NYCTLCData> pairRDD,
+			final String dataType ) {
+		final PairFunction<Tuple2<Long, NYCTLCData>, Long, Double> toDataType = i -> new Tuple2<>(
+				i._1,
+				i._2.getValue(
+						dataType));
+		return pairRDD.mapToPair(
+				toDataType);
 	}
 
 	public static void renderTMS(
 			final int zoom,
 			final JavaPairRDD<Long, Double> rdd,
-			final String outputS3Prefix,
-			final String rampType ) {
+			final String outputS3Prefix ) {
 		final PairFunction<Tuple2<Long, Double>, Tuple3<Integer, Integer, Integer>, Tuple2<Long, Double>> keyWithTile = (
 				final Tuple2<Long, Double> t ) -> {
 			final Tuple3<Integer, Integer, Integer> tms = SparkKDE.tmsCellToTile(
@@ -134,8 +276,7 @@ public class SparkTMSFromS3InTMS
 				.foreach(
 						new WriteTileToS3(
 								outputS3Prefix.endsWith(
-										"/") ? outputS3Prefix : outputS3Prefix + "/",
-								rampType));
+										"/") ? outputS3Prefix : outputS3Prefix + "/"));
 	}
 
 	private static class WriteTileToS3 implements
@@ -148,21 +289,10 @@ public class SparkTMSFromS3InTMS
 		private static final long serialVersionUID = 1L;
 		private final String tileBase;
 		private static AmazonS3Client s3 = new AmazonS3Client();
-		private final String rampType;
-		private BreakpointColorRamp ramp = null;
 
 		public WriteTileToS3(
-				final String tileBase,
-				final String rampType ) {
+				final String tileBase ) {
 			this.tileBase = tileBase;
-			this.rampType = rampType;
-		}
-
-		private BreakpointColorRamp getRamp() {
-			if (ramp == null) {
-				ramp = RampType.fromString(rampType).ramp;
-			}
-			return ramp;
 		}
 
 		@Override
@@ -181,7 +311,7 @@ public class SparkTMSFromS3InTMS
 							image.setRGB(
 									x,
 									y,
-									getRamp().getColor(
+									ramp.getColor(
 											matrix[x][y]).getRGB());
 						}
 					}

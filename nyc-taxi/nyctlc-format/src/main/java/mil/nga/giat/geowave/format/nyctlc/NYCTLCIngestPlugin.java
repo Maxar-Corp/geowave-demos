@@ -36,6 +36,7 @@ import java.io.*;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Collection;
 import java.util.Date;
 import java.util.HashSet;
@@ -277,6 +278,18 @@ public class NYCTLCIngestPlugin extends
 						pointBuilder.set(
 								NYCTLCUtils.Field.TIME_OF_DAY_SEC.getIndexedName(),
 								point.getTimeOfDaySec());
+						break;
+					case DAY_OF_WEEK:
+						Calendar cal = Calendar.getInstance();
+						cal.setTimeInMillis(point.getPickupDatetime());
+						pointBuilder.set(
+								NYCTLCUtils.Field.DAY_OF_WEEK.getIndexedName(),
+								cal.get(Calendar.DAY_OF_WEEK));
+						break;
+					case DURATION:
+						pointBuilder.set(
+								NYCTLCUtils.Field.DURATION.getIndexedName(),
+								point.getDropoffDatetime() - point.getPickupDatetime());
 						break;
 					case CAB_TYPE:
 						pointBuilder.set(

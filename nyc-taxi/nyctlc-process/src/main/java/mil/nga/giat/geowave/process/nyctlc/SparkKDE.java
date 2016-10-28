@@ -12,6 +12,7 @@ import org.apache.spark.api.java.function.Function2;
 import org.apache.spark.api.java.function.PairFunction;
 import org.geotools.filter.text.cql2.CQLException;
 import org.opengis.feature.simple.SimpleFeature;
+import org.opengis.filter.Filter;
 import org.opengis.referencing.FactoryException;
 
 import com.beust.jcommander.ParameterException;
@@ -480,6 +481,99 @@ public class SparkKDE
 											weight));
 								}
 							});
+				}
+			}
+		}
+		return cells.iterator();
+	}
+
+	public static Iterator<Tuple2<Tuple3<Integer, String, Long>, NYCTLCData>> getAllTMSCells(
+			final SimpleFeature s,
+			final Tuple2<String, Tuple2<Filter, TDigestSerializable[]>>[] filters,
+			final int minZoom,
+			final int maxZoom ) {
+		final List<Tuple2<Tuple3<Integer, String, Long>, NYCTLCData>> cells = new ArrayList<>();
+		if (s != null) {
+			for (final Tuple2<String, Tuple2<Filter, TDigestSerializable[]>> f : filters) {
+				if (f._2._1.evaluate(s)) {
+					for (int zoom = minZoom; zoom <= maxZoom; zoom++) {
+						final int finalZoom = zoom;
+						final int numPosts = 1 << (zoom + TILE_SCALE);
+						Point pt = null;
+						if (s != null) {
+							final Object pickupGeomObj = s.getDefaultGeometry();
+							final Object dropOffGeomObj = s.getAttribute(NYCTLCUtils.Field.DROPOFF_LOCATION
+									.getIndexedName());
+							if ((pickupGeomObj != null) && (pickupGeomObj instanceof Geometry)) {
+								pt = ((Geometry) pickupGeomObj).getCentroid();
+								final Tuple2<Double, Double> coords = getTileCoordsFromLonLat(
+										new Tuple2<Double, Double>(
+												pt.getX(),
+												pt.getY()),
+										zoom + TILE_SCALE);
+								final String name = f._1 + "_pickup";
+								GaussianFilter.incrementPtFast(
+										new double[] {
+											coords._1,
+											coords._2
+										},
+										new int[] {
+											numPosts,
+											numPosts,
+										},
+										new CellCounter() {
+											@Override
+											public void increment(
+													final long cellId,
+													final double weight ) {
+												cells.add(new Tuple2<Tuple3<Integer, String, Long>, NYCTLCData>(
+														new Tuple3<>(
+																finalZoom,
+																name,
+																cellId),
+														new NYCTLCData(
+																weight,
+																f._2._2,
+																s)));
+											}
+										});
+							}
+							if ((dropOffGeomObj != null) && (dropOffGeomObj instanceof Geometry)) {
+								pt = ((Geometry) dropOffGeomObj).getCentroid();
+								final Tuple2<Double, Double> coords = getTileCoordsFromLonLat(
+										new Tuple2<Double, Double>(
+												pt.getX(),
+												pt.getY()),
+										zoom + TILE_SCALE);
+								final String name = f._1 + "_dropoff";
+								GaussianFilter.incrementPtFast(
+										new double[] {
+											coords._1,
+											coords._2
+										},
+										new int[] {
+											numPosts,
+											numPosts,
+										},
+										new CellCounter() {
+											@Override
+											public void increment(
+													final long cellId,
+													final double weight ) {
+												cells.add(new Tuple2<Tuple3<Integer, String, Long>, NYCTLCData>(
+														new Tuple3<>(
+																finalZoom,
+																name,
+																cellId),
+														new NYCTLCData(
+																weight,
+																f._2._2,
+																s)));
+											}
+										});
+							}
+						}
+					}
 				}
 			}
 		}

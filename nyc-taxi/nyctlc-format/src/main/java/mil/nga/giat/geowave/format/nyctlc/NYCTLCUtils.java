@@ -32,7 +32,15 @@ public class NYCTLCUtils
 				Field.PICKUP_LONGITUDE,
 				Field.PICKUP_LATITUDE,
 				Field.PICKUP_DATETIME,
-				Field.DROPOFF_DATETIME
+				Field.DROPOFF_DATETIME,
+				Field.EXTRA,
+				Field.FARE_AMOUNT,
+				Field.MTA_TAX,
+				Field.PASSENGER_COUNT,
+				Field.TIP_AMOUNT,
+				Field.TOLLS_AMOUNT,
+				Field.TOTAL_AMOUNT,
+				Field.TRIP_DISTANCE,
 			})));
 
 	public enum Field {
@@ -205,6 +213,16 @@ public class NYCTLCUtils
 				true,
 				null), // green taxi only
 		TIME_OF_DAY_SEC(
+				Long.class,
+				new String[] {},
+				false,
+				null), // derived field
+		DAY_OF_WEEK(
+				Integer.class,
+				new String[] {},
+				false,
+				null), // derived field
+		DURATION(
 				Long.class,
 				new String[] {},
 				false,

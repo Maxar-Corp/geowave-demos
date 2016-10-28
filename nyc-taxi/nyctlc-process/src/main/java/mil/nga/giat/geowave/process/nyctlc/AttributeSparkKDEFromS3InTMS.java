@@ -46,7 +46,7 @@ public class AttributeSparkKDEFromS3InTMS
 				.getOrCreate();
 		int year = 2013;
 		final List<String> paths = new ArrayList<>();
-//		for (int month = 8; month <= 10; month++) {
+//		for (int month = 8; month <= 12; month++) {
 //			paths.add(
 //					String.format(
 //							"s3://nyc-tlc/trip data/green_tripdata_%04d-%02d.csv",
@@ -80,7 +80,8 @@ public class AttributeSparkKDEFromS3InTMS
 //			}
 //		}
 		year = 2016;
-		for (int month = 1; month <= 6; month++) {
+		for (int month = 6; month <= 6; month++) {
+//		for (int month = 1; month <= 6; month++) {
 			paths.add(
 					String.format(
 							"s3://nyc-tlc/trip data/yellow_tripdata_%04d-%02d.csv",
