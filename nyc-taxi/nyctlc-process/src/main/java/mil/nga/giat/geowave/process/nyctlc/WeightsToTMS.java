@@ -11,6 +11,7 @@ import java.util.List;
 
 import javax.imageio.ImageIO;
 
+import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function;
@@ -25,16 +26,25 @@ import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.PutObjectRequest;
 
 import mil.nga.giat.geowave.process.nyctlc.BreakpointColorRamp.Breakpoint;
+import mil.nga.giat.geowave.process.nyctlc.SparkTMSFromS3InTMS.RampType;
 import scala.Tuple2;
 import scala.Tuple3;
 
 public class WeightsToTMS
 {
-	private static final BreakpointColorRamp ramp = getDivergentColorMap();
 
 	public static void main(
 			final String[] args ) {
-		try (final JavaSparkContext sc = new JavaSparkContext()) {
+		final SparkConf config = new SparkConf();
+		config.set(
+				"spark.serializer",
+				"org.apache.spark.serializer.KryoSerializer");
+		config.set(
+				"spark.kryo.registrator",
+				GeoWaveRegistrator.class.getCanonicalName());
+		config.setAppName("Weights to TMS");
+		try (final JavaSparkContext sc = new JavaSparkContext(
+				config)) {
 			final int minLevel = Integer.parseInt(args[0]);
 
 			final int maxLevel = Integer.parseInt(args[1]);
@@ -172,7 +182,7 @@ public class WeightsToTMS
 					td.tdigest.add(
 							t._2);
 					return td;
-				},
+				} ,
 				(
 						final TDigestSerializable td1,
 						final TDigestSerializable td2 ) -> {
@@ -223,6 +233,7 @@ public class WeightsToTMS
 	public static void renderTMS(
 			final int zoom,
 			final JavaPairRDD<Long, Double> rdd,
+			final String rampType,
 			final String outputS3Prefix ) {
 		final PairFunction<Tuple2<Long, Double>, Tuple3<Integer, Integer, Integer>, Tuple2<Long, Double>> keyWithTile = (
 				final Tuple2<Long, Double> t ) -> {
@@ -236,10 +247,9 @@ public class WeightsToTMS
 		final Function2<Double[][], Tuple2<Long, Double>, Double[][]> applyValueToMatrix = (
 				final Double[][] matrix,
 				final Tuple2<Long, Double> t ) -> {
-			final Tuple2<Tuple3<Integer, Integer, Integer>, Tuple2<Integer, Integer>> tmsAndPosition = SparkKDE
-					.tmsCellToTileAndPosition(
-							t._1,
-							zoom);
+			final Tuple2<Tuple3<Integer, Integer, Integer>, Tuple2<Integer, Integer>> tmsAndPosition = SparkKDE.tmsCellToTileAndPosition(
+					t._1,
+					zoom);
 			matrix[tmsAndPosition._2._1][tmsAndPosition._2._2] = t._2;
 			return matrix;
 		};
@@ -276,7 +286,8 @@ public class WeightsToTMS
 				.foreach(
 						new WriteTileToS3(
 								outputS3Prefix.endsWith(
-										"/") ? outputS3Prefix : outputS3Prefix + "/"));
+										"/") ? outputS3Prefix : outputS3Prefix + "/",
+								rampType));
 	}
 
 	private static class WriteTileToS3 implements
@@ -289,10 +300,21 @@ public class WeightsToTMS
 		private static final long serialVersionUID = 1L;
 		private final String tileBase;
 		private static AmazonS3Client s3 = new AmazonS3Client();
+		private final String rampType;
+		private BreakpointColorRamp ramp = null;
 
 		public WriteTileToS3(
-				final String tileBase ) {
+				final String tileBase,
+				final String rampType ) {
 			this.tileBase = tileBase;
+			this.rampType = rampType;
+		}
+
+		private BreakpointColorRamp getRamp() {
+			if (ramp == null) {
+				ramp = RampType.fromString(rampType).ramp;
+			}
+			return ramp;
 		}
 
 		@Override
@@ -311,7 +333,7 @@ public class WeightsToTMS
 							image.setRGB(
 									x,
 									y,
-									ramp.getColor(
+									getRamp().getColor(
 											matrix[x][y]).getRGB());
 						}
 					}
@@ -328,13 +350,14 @@ public class WeightsToTMS
 				// ) {
 				final String url ) {
 			try {
-				// File f = new File("C:\\Temp\\tiles\\"+ t._1._1() + "\\" +
+				// File f = new File("C:\\Temp\\heatmap\\"+ t._1._1() + "\\" +
 				// t._1._2() + "\\" + t._1._3() + ".png");
 				// f.getParentFile().mkdirs();
 				// ImageIO.write(
 				// image,
 				// "png",
-				// new File("C:\\Temp\\tiles\\"+ t._1._1() + "\\" + t._1._2() +
+				// new File("C:\\Temp\\heatmap\\"+ t._1._1() + "\\" + t._1._2()
+				// +
 				// "\\" + t._1._3() + ".png"));
 
 				final ByteArrayOutputStream os = new ByteArrayOutputStream();

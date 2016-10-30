@@ -525,7 +525,6 @@ public class SparkIngest
 						pt,
 						null,
 						null);
-
 				if (transformToWebMercator && f != null) {
 					try {
 

@@ -17,8 +17,6 @@ public class NYCTLCData implements
 	private double passengerCount;
 	private double tripDistance;
 	private double fareAmount;
-	private double extra;
-	private double mtaTax;
 	private double tipAmount;
 	private double tollsAmount;
 	private double totalAmount;
@@ -49,46 +47,38 @@ public class NYCTLCData implements
 				weight,
 				v[2],
 				tdigests[2]);
-		extra = getValue(
+		tipAmount = getValue(
 				weight,
 				v[3],
 				tdigests[3]);
-		mtaTax = getValue(
+		tollsAmount = getValue(
 				weight,
 				v[4],
 				tdigests[4]);
-		tipAmount = getValue(
+		totalAmount = getValue(
 				weight,
 				v[5],
 				tdigests[5]);
-		tollsAmount = getValue(
+		duration = getValue(
 				weight,
 				v[6],
 				tdigests[6]);
-		totalAmount = getValue(
+		tipPerDuration = getValue(
 				weight,
 				v[7],
 				tdigests[7]);
-		duration = getValue(
+		farePerDuration = getValue(
 				weight,
 				v[8],
 				tdigests[8]);
-		tipPerDuration = getValue(
+		tipPerTripDistance = getValue(
 				weight,
 				v[9],
 				tdigests[9]);
-		farePerDuration = getValue(
+		farePerTripDistance = getValue(
 				weight,
 				v[10],
 				tdigests[10]);
-		tipPerTripDistance = getValue(
-				weight,
-				v[11],
-				tdigests[11]);
-		farePerTripDistance = getValue(
-				weight,
-				v[12],
-				tdigests[12]);
 	}
 
 	public double getWeight() {
@@ -121,16 +111,14 @@ public class NYCTLCData implements
 		v[0] = ((Number) f.getAttribute(NYCTLCUtils.Field.PASSENGER_COUNT.getIndexedName()));
 		v[1] = ((Number) f.getAttribute(NYCTLCUtils.Field.TRIP_DISTANCE.getIndexedName()));
 		v[2] = ((Number) f.getAttribute(NYCTLCUtils.Field.FARE_AMOUNT.getIndexedName()));
-		v[3] = ((Number) f.getAttribute(NYCTLCUtils.Field.EXTRA.getIndexedName()));
-		v[4] = ((Number) f.getAttribute(NYCTLCUtils.Field.MTA_TAX.getIndexedName()));
-		v[5] = ((Number) f.getAttribute(NYCTLCUtils.Field.TIP_AMOUNT.getIndexedName()));
-		v[6] = ((Number) f.getAttribute(NYCTLCUtils.Field.TOLLS_AMOUNT.getIndexedName()));
-		v[7] = ((Number) f.getAttribute(NYCTLCUtils.Field.TOTAL_AMOUNT.getIndexedName()));
-		v[8] = ((Number) f.getAttribute(NYCTLCUtils.Field.DURATION.getIndexedName()));
-		v[9] = (v[8].doubleValue() > 0.0 ? v[5].doubleValue() / v[8].doubleValue() : 0.0);
-		v[10] = (v[8].doubleValue() > 0.0 ? v[2].doubleValue() / v[8].doubleValue() : 0.0);
-		v[11] = (v[1].doubleValue() > 0.0 ? v[5].doubleValue() / v[1].doubleValue() : 0.0);
-		v[12] = (v[1].doubleValue() > 0.0 ? v[2].doubleValue() / v[1].doubleValue() : 0.0);
+		v[3] = ((Number) f.getAttribute(NYCTLCUtils.Field.TIP_AMOUNT.getIndexedName()));
+		v[4] = ((Number) f.getAttribute(NYCTLCUtils.Field.TOLLS_AMOUNT.getIndexedName()));
+		v[5] = ((Number) f.getAttribute(NYCTLCUtils.Field.TOTAL_AMOUNT.getIndexedName()));
+		v[6] = ((Number) f.getAttribute(NYCTLCUtils.Field.DURATION.getIndexedName()));
+		v[7] = (v[6].doubleValue() > 0.0 ? v[3].doubleValue() / v[6].doubleValue() : 0.0);
+		v[8] = (v[6].doubleValue() > 0.0 ? v[2].doubleValue() / v[6].doubleValue() : 0.0);
+		v[9] = (v[1].doubleValue() > 0.0 ? v[3].doubleValue() / v[1].doubleValue() : 0.0);
+		v[10] = (v[1].doubleValue() > 0.0 ? v[2].doubleValue() / v[1].doubleValue() : 0.0);
 		return v;
 	}
 
@@ -139,11 +127,9 @@ public class NYCTLCData implements
 		weight += other.weight;
 
 		duration += other.duration;
-		extra += other.extra;
 		fareAmount += other.fareAmount;
 		farePerDuration += other.farePerDuration;
 		farePerTripDistance += other.farePerTripDistance;
-		mtaTax += other.mtaTax;
 
 		passengerCount += other.passengerCount;
 		tipAmount += other.tipAmount;
@@ -167,10 +153,6 @@ public class NYCTLCData implements
 				return tripDistance;
 			case "fare_amount":
 				return fareAmount;
-			case "extra":
-				return extra;
-			case "mta_tax":
-				return mtaTax;
 			case "tip_amount":
 				return tipAmount;
 			case "tolls_amount":

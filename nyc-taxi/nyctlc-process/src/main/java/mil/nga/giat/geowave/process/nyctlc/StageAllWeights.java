@@ -3,6 +3,7 @@ package mil.nga.giat.geowave.process.nyctlc;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -59,7 +60,7 @@ public class StageAllWeights
 		} : new String[] {
 			taxiType
 		};
-		final Map<String, List<String>> pathMap = new HashMap<String, List<String>>();
+		final Map<String, List<String>> pathMap = new LinkedHashMap<String, List<String>>();
 		for (final String taxi : taxiTypes) {
 			for (int year = minYear; year <= maxYear; year++) {
 				final List<String> paths = new ArrayList<>();
@@ -95,8 +96,8 @@ public class StageAllWeights
 
 		final int maxLevel = Integer.parseInt(args[1]);
 		final String cqlFilterStr;
-		if (args.length > 6) {
-			cqlFilterStr = args[6];
+		if (args.length > 7) {
+			cqlFilterStr = args[7];
 		}
 		else {
 			cqlFilterStr = null;
@@ -134,33 +135,33 @@ public class StageAllWeights
 						e1.getValue() + " AND " + e2.getValue());
 			}
 		}
-		// final ExecutorService executor = Executors.newFixedThreadPool(50);
+		final ExecutorService executor = Executors.newFixedThreadPool(Integer.parseInt(args[6]));
 		for (final Entry<String, List<String>> pathEntry : pathMap.entrySet()) {
-			// executor.execute(new Runnable() {
-			// @Override
-			// public void run() {
-			workDataset(
-					pathEntry.getKey(),
-					pathEntry.getValue(),
-					spark,
-					minLevel,
-					maxLevel,
-					cqlFilterStr,
-					filters,
-					args[5]);
-			// }
-			// });
+			executor.execute(new Runnable() {
+				@Override
+				public void run() {
+					workDataset(
+							pathEntry.getKey(),
+							pathEntry.getValue(),
+							spark,
+							minLevel,
+							maxLevel,
+							cqlFilterStr,
+							filters,
+							args[5]);
+				}
+			});
 		}
-		// executor.shutdown();
-		// try {
-		// executor.awaitTermination(
-		// 7,
-		// TimeUnit.DAYS);
-		// }
-		// catch (final InterruptedException e) {
-		// // TODO Auto-generated catch block
-		// e.printStackTrace();
-		// }
+		executor.shutdown();
+		try {
+			executor.awaitTermination(
+					7,
+					TimeUnit.DAYS);
+		}
+		catch (final InterruptedException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 		spark.stop();
 	}
 
@@ -186,7 +187,7 @@ public class StageAllWeights
 				.csv(
 						paths.toArray(
 								new String[] {}));
-		// "C:\\Users\\rfecher\\Downloads\\green_tripdata_2013-08.csv");
+		// "C:\\Users\\Rich\\Downloads\\yellow_tripdata_2009-01-reduced.csv");
 		JavaRDD<SimpleFeature> sfRdd = df.toJavaRDD().map(
 				new RowToFeature(
 						false));
@@ -198,8 +199,8 @@ public class StageAllWeights
 		}
 		final Map<String, TDigestSerializable[]> initialTds = new HashMap<>();
 		for (final String filterName : filters.keySet()) {
-			final TDigestSerializable[] td = new TDigestSerializable[13];
-			for (int i = 0; i < 13; i++) {
+			final TDigestSerializable[] td = new TDigestSerializable[11];
+			for (int i = 0; i < 11; i++) {
 				td[i] = new TDigestSerializable();
 			}
 			initialTds.put(
@@ -218,13 +219,13 @@ public class StageAllWeights
 							(
 									k,
 									v ) -> {
-								final TDigestSerializable[] tds = y.get(
-										k);
-								for (int i = 0; i < tds.length; i++) {
-									tds[i].tdigest.add(
-											v[i].tdigest);
-								}
-							});
+						final TDigestSerializable[] tds = y.get(
+								k);
+						for (int i = 0; i < tds.length; i++) {
+							tds[i].tdigest.add(
+									v[i].tdigest);
+						}
+					});
 					return y;
 				});
 		final Function<NYCTLCData, NYCTLCData> identity = x -> x;
@@ -249,12 +250,13 @@ public class StageAllWeights
 				.cache();
 		final String path = rootKDEDir.endsWith(
 				"/") ? rootKDEDir + name + "/" : rootKDEDir + "/" + name + "/";
+
 		for (int zoom = minZoom; zoom <= maxZoom; zoom++) {
 			final JavaPairRDD<Tuple2<Long, String>, NYCTLCData> levelRdd = getRDDByLevel(
 					pairRDD,
 					zoom);
 			levelRdd.repartition(
-					1).saveAsObjectFile(
+					1).saveAsTextFile(
 							path + "aggregatesByZoom" + "/" + zoom);
 
 			for (final String key : filters.keySet()) {
@@ -295,10 +297,9 @@ public class StageAllWeights
 						i._1._3(),
 						i._1._2()),
 				i._2);
-		return pairRDD
-				.filter(
-						v -> v._1._1().equals(
-								level))
+		return pairRDD.filter(
+				v -> v._1._1().equals(
+						level))
 				.mapToPair(
 						removeLevel);
 	}
@@ -309,10 +310,9 @@ public class StageAllWeights
 		final PairFunction<Tuple2<Tuple2<Long, String>, NYCTLCData>, Long, NYCTLCData> removeName = i -> new Tuple2<>(
 				i._1._1,
 				i._2);
-		return pairRDD
-				.filter(
-						v -> v._1._2.equals(
-								name))
+		return pairRDD.filter(
+				v -> v._1._2.equals(
+						name))
 				.mapToPair(
 						removeName);
 	}
