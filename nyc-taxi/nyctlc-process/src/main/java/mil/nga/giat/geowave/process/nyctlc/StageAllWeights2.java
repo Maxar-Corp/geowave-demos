@@ -29,9 +29,8 @@ import org.opengis.referencing.NoSuchAuthorityCodeException;
 
 import mil.nga.giat.geowave.process.nyctlc.SparkIngest.RowToFeature;
 import scala.Tuple2;
-import scala.Tuple3;
 
-public class StageAllWeights
+public class StageAllWeights2
 {
 
 	public static void main(
@@ -187,124 +186,94 @@ public class StageAllWeights
 				.csv(
 						paths.toArray(
 								new String[] {}));
-		// "C:\\development\\data\\yellow_tripdata_2009-12-reduced.csv");
-		for (int zoom = minZoom; zoom <= maxZoom; zoom++) {
-			JavaRDD<SimpleFeature> sfRdd = df.toJavaRDD().map(
-					new RowToFeature(
-							false));
-
-			if ((cqlFilterStr != null) && !cqlFilterStr.isEmpty()) {
-				sfRdd = sfRdd.filter(
-						new CQLFilterFunction(
-								cqlFilterStr));
+		final Map<String, TDigestSerializable[]> initialTds = new HashMap<>();
+		for (final String filterName : filters.keySet()) {
+			final TDigestSerializable[] td = new TDigestSerializable[11];
+			for (int i = 0; i < 11; i++) {
+				td[i] = new TDigestSerializable();
 			}
-			final Map<String, TDigestSerializable[]> initialTds = new HashMap<>();
-			for (final String filterName : filters.keySet()) {
-				final TDigestSerializable[] td = new TDigestSerializable[11];
-				for (int i = 0; i < 11; i++) {
-					td[i] = new TDigestSerializable();
-				}
-				initialTds.put(
-						filterName,
-						td);
-			}
-
-			final Map<String, TDigestSerializable[]> resultingTds = sfRdd.aggregate(
-					initialTds,
-					new TDigestAggregator(
-							filters),
-					(
-							x,
-							y ) -> {
-						x.forEach(
-								(
-										k,
-										v ) -> {
-									final TDigestSerializable[] tds = y.get(
-											k);
-									for (int i = 0; i < tds.length; i++) {
-										tds[i].tdigest.add(
-												v[i].tdigest);
-									}
-								});
-						return y;
-					});
-			final Function<NYCTLCData, NYCTLCData> identity = x -> x;
-
-			final Function2<NYCTLCData, NYCTLCData, NYCTLCData> sum = (
-					final NYCTLCData x,
-					final NYCTLCData y ) -> {
-				return x.add(
-						y);
-			};
-			final JavaPairRDD<Tuple3<Integer, String, Long>, NYCTLCData> pairRDD = sfRdd
-					.flatMapToPair(
-							new WeightCalculator(
-									filters,
-									resultingTds,
-									zoom,
-									zoom))
-					// minZoom,
-					// maxZoom))
-					.combineByKey(
-							identity,
-							sum,
-							sum);
-			// .cache();
-			final String path = rootKDEDir.endsWith(
-					"/") ? rootKDEDir + name + "/" : rootKDEDir + "/" + name + "/";
-
-			final JavaPairRDD<Tuple2<Long, String>, NYCTLCData> levelRdd = getRDDByLevel(
-					pairRDD,
-					zoom);
-			levelRdd.repartition(
-					1).saveAsObjectFile(
-							path + "aggregatesByZoom" + "/" + zoom);
-
-			for (final String key : filters.keySet()) {
-				final String pickupName = key + "_pickup";
-				final String dropoffName = key + "_dropoff";
-				final JavaPairRDD<Long, NYCTLCData> pickupRdd = getRDDByName(
-						levelRdd,
-						pickupName);
-				pickupRdd.repartition(
-						1).saveAsObjectFile(
-								path + key + "/" + "pickup" + "/" + zoom);
-				pickupRdd.unpersist(
-						true);
-
-				final JavaPairRDD<Long, NYCTLCData> dropoffRdd = getRDDByName(
-						levelRdd,
-						dropoffName);
-				dropoffRdd.repartition(
-						1).saveAsObjectFile(
-								path + key + "/" + "dropoff" + "/" + zoom);
-				dropoffRdd.unpersist(
-						true);
-			}
-			levelRdd.unpersist(
-					true);
-			sfRdd.unpersist(
-					true);
-			pairRDD.unpersist(
-					true);
+			initialTds.put(
+					filterName,
+					td);
 		}
-	}
 
-	private static JavaPairRDD<Tuple2<Long, String>, NYCTLCData> getRDDByLevel(
-			final JavaPairRDD<Tuple3<Integer, String, Long>, NYCTLCData> pairRDD,
-			final Integer level ) {
-		final PairFunction<Tuple2<Tuple3<Integer, String, Long>, NYCTLCData>, Tuple2<Long, String>, NYCTLCData> removeLevel = i -> new Tuple2<>(
-				new Tuple2<>(
-						i._1._3(),
-						i._1._2()),
-				i._2);
-		return pairRDD
-				.filter(
-						v -> v._1._1().equals(
-								level))
-				.mapToPair(
-						removeLevel);
+		JavaRDD<SimpleFeature> sfRdd = df.toJavaRDD().map(
+				new RowToFeature(
+						false));
+		final Map<String, TDigestSerializable[]> resultingTds = sfRdd.aggregate(
+				initialTds,
+				new TDigestAggregator(
+						filters),
+				(
+						x,
+						y ) -> {
+					x.forEach(
+							(
+									k,
+									v ) -> {
+								final TDigestSerializable[] tds = y.get(
+										k);
+								for (int i = 0; i < tds.length; i++) {
+									tds[i].tdigest.add(
+											v[i].tdigest);
+								}
+							});
+					return y;
+				});
+		for (int zoom = minZoom; zoom <= maxZoom; zoom++) {
+			for (final String filterName : filters.keySet()) {
+				if ((cqlFilterStr != null) && !cqlFilterStr.isEmpty()) {
+					sfRdd = sfRdd.filter(
+							new CQLFilterFunction(
+									cqlFilterStr));
+				}
+				final Function<NYCTLCData, NYCTLCData> identity = x -> x;
+
+				final Function2<NYCTLCData, NYCTLCData, NYCTLCData> sum = (
+						final NYCTLCData x,
+						final NYCTLCData y ) -> {
+					return x.add(
+							y);
+				};
+				final String path = rootKDEDir.endsWith(
+						"/") ? rootKDEDir + name + "/" : rootKDEDir + "/" + name + "/";
+
+				sfRdd
+						.flatMapToPair(
+								new WeightCalculator2(
+										filters.get(
+												filterName),
+										resultingTds.get(
+												filterName),
+										true,
+										zoom))
+						.combineByKey(
+								identity,
+								sum,
+								sum)
+						.repartition(
+								1)
+						.saveAsObjectFile(
+								path + filterName + "/" + "pickup" + "/" + zoom);
+				sfRdd
+						.flatMapToPair(
+								new WeightCalculator2(
+										filters.get(
+												filterName),
+										resultingTds.get(
+												filterName),
+										false,
+										zoom))
+						.combineByKey(
+								identity,
+								sum,
+								sum)
+						.repartition(
+								1)
+						.saveAsObjectFile(
+								path + filterName + "/" + "dropoff" + "/" + zoom);
+			}
+		}
 	}
 
 	private static JavaPairRDD<Long, NYCTLCData> getRDDByName(
@@ -419,67 +388,105 @@ public class StageAllWeights
 
 	}
 
-	private static class WeightCalculator implements
-			PairFlatMapFunction<SimpleFeature, Tuple3<Integer, String, Long>, NYCTLCData>
+	private static class TDigestAggregator2 implements
+			Function2<TDigestSerializable[], SimpleFeature, TDigestSerializable[]>
 	{
 
 		/**
 		 *
 		 */
 		private static final long serialVersionUID = 1L;
-		private final Map<String, String> filterStrings;
-		final Map<String, TDigestSerializable[]> tds;
-		private Tuple2<String, Tuple2<Filter, TDigestSerializable[]>>[] filters = null;
-		private final int minZoom;
-		private final int maxZoom;
+		private final String filterString;
+		private Filter filter = null;
 
-		public WeightCalculator(
-				final Map<String, String> filterStrings,
-				final Map<String, TDigestSerializable[]> tds,
-				final int minZoom,
-				final int maxZoom ) {
-			this.filterStrings = filterStrings;
+		public TDigestAggregator2(
+				final String filterString ) {
+			this.filterString = filterString;
+		}
+
+		private Filter getFilter() {
+			if (filter == null) {
+				try {
+					filter = CQL.toFilter(filterString);
+				}
+				catch (final CQLException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+			}
+			return filter;
+		}
+
+		@Override
+		public TDigestSerializable[] call(
+				final TDigestSerializable[] tds,
+				final SimpleFeature f )
+				throws Exception {
+			if (f != null) {
+				final Filter internalFilter = getFilter();
+				if (internalFilter.evaluate(f)) {
+					final Number[] values = NYCTLCData.featureToValues(f);
+					for (int i = 0; i < tds.length; i++) {
+						tds[i].tdigest.add(values[i].doubleValue());
+					}
+				}
+			}
+			return tds;
+		}
+
+	}
+
+	private static class WeightCalculator2 implements
+			PairFlatMapFunction<SimpleFeature, Long, NYCTLCData>
+	{
+
+		/**
+		 *
+		 */
+		private static final long serialVersionUID = 1L;
+		private final String filterString;
+		final TDigestSerializable[] tds;
+		private Tuple2<Filter, TDigestSerializable[]> filterAndTDigest = null;
+		private final int zoom;
+		private final boolean pickup;
+
+		public WeightCalculator2(
+				final String filterString,
+				final TDigestSerializable[] tds,
+				final boolean pickup,
+				final int zoom ) {
+			this.filterString = filterString;
+			this.pickup = pickup;
 			this.tds = tds;
-			this.minZoom = minZoom;
-			this.maxZoom = maxZoom;
+			this.zoom = zoom;
 
 		}
 
-		private Tuple2<String, Tuple2<Filter, TDigestSerializable[]>>[] getFilters() {
+		private Tuple2<Filter, TDigestSerializable[]> getFilter() {
 			try {
-				if (filters == null) {
-					final Tuple2<String, Tuple2<Filter, TDigestSerializable[]>>[] internalFilters = new Tuple2[filterStrings
-							.size()];
-					int i = 0;
-					for (final Entry<String, String> entry : filterStrings.entrySet()) {
-						Filter filter;
-						filter = CQL.toFilter(entry.getValue());
-
-						internalFilters[i++] = new Tuple2<String, Tuple2<Filter, TDigestSerializable[]>>(
-								entry.getKey(),
-								new Tuple2<Filter, TDigestSerializable[]>(
-										filter,
-										tds.get(entry.getKey())));
-					}
-					filters = internalFilters;
+				if (filterAndTDigest == null) {
+					final Filter filter = CQL.toFilter(filterString);
+					filterAndTDigest = new Tuple2<>(
+							filter,
+							tds);
 				}
 			}
 			catch (final CQLException e) {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
-			return filters;
+			return filterAndTDigest;
 		}
 
 		@Override
-		public Iterator<Tuple2<Tuple3<Integer, String, Long>, NYCTLCData>> call(
+		public Iterator<Tuple2<Long, NYCTLCData>> call(
 				final SimpleFeature f )
 				throws Exception {
 			return SparkKDE.getAllTMSCells(
 					f,
-					getFilters(),
-					minZoom,
-					maxZoom);
+					getFilter(),
+					pickup,
+					zoom);
 		}
 
 	}

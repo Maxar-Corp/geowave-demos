@@ -189,6 +189,7 @@ public class SparkTMSFromS3InTMS
 			}
 			writeImage(
 					image,
+					// t);
 					getTileURL(t._1));
 		}
 
@@ -198,14 +199,12 @@ public class SparkTMSFromS3InTMS
 				// ) {
 				final String url ) {
 			try {
-				// File f = new File("C:\\Temp\\tiles\\"+ t._1._1() + "\\" +
-				// t._1._2() + "\\" + t._1._3() + ".png");
+				// File f = new File(getTileURL(t._1));
 				// f.getParentFile().mkdirs();
 				// ImageIO.write(
 				// image,
 				// "png",
-				// new File("C:\\Temp\\tiles\\"+ t._1._1() + "\\" + t._1._2() +
-				// "\\" + t._1._3() + ".png"));
+				// new File(getTileURL(t._1)));
 
 				final ByteArrayOutputStream os = new ByteArrayOutputStream();
 				ImageIO.write(

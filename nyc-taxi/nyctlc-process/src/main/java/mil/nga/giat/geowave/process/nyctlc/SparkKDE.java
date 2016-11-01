@@ -556,6 +556,7 @@ public class SparkKDE
 											numPosts,
 										},
 										new CellCounter() {
+
 											@Override
 											public void increment(
 													final long cellId,
@@ -570,6 +571,7 @@ public class SparkKDE
 																f._2._2,
 																s)));
 											}
+
 										});
 							}
 						}
@@ -578,6 +580,61 @@ public class SparkKDE
 			}
 		}
 		return cells.iterator();
+	}
+
+	public static Iterator<Tuple2<Long, NYCTLCData>> getAllTMSCells(
+			final SimpleFeature s,
+			final Tuple2<Filter, TDigestSerializable[]> f,
+			final boolean pickup,
+			final int zoom ) {
+		final List<Tuple2<Long, NYCTLCData>> cells = new ArrayList<>();
+		if (s != null) {
+			if (f._1.evaluate(s)) {
+				final int numPosts = 1 << (zoom + TILE_SCALE);
+				Point pt = null;
+				if (s != null) {
+					final Object geomObj;
+					if (pickup) {
+						geomObj = s.getDefaultGeometry();
+					}
+					else {
+						geomObj = s.getAttribute(NYCTLCUtils.Field.DROPOFF_LOCATION.getIndexedName());
+					}
+					if ((geomObj != null) && (geomObj instanceof Geometry)) {
+						pt = ((Geometry) geomObj).getCentroid();
+						final Tuple2<Double, Double> coords = getTileCoordsFromLonLat(
+								new Tuple2<Double, Double>(
+										pt.getX(),
+										pt.getY()),
+								zoom + TILE_SCALE);
+						GaussianFilter.incrementPtFast(
+								new double[] {
+									coords._1,
+									coords._2
+								},
+								new int[] {
+									numPosts,
+									numPosts,
+								},
+								new CellCounter() {
+									@Override
+									public void increment(
+											final long cellId,
+											final double weight ) {
+										cells.add(new Tuple2<Long, NYCTLCData>(
+												cellId,
+												new NYCTLCData(
+														weight,
+														f._2,
+														s)));
+									}
+								});
+					}
+				}
+			}
+		}
+		return cells.iterator();
+
 	}
 
 	public static Iterator<Tuple2<Tuple2<Integer, Long>, Tuple2<Double, Double>>> getTMSCellsWithAttribute(
