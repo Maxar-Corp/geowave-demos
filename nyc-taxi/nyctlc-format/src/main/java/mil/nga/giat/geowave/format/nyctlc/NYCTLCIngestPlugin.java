@@ -33,6 +33,7 @@ import org.opengis.feature.simple.SimpleFeature;
 import org.opengis.feature.simple.SimpleFeatureType;
 
 import java.io.*;
+import java.nio.ByteBuffer;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -57,10 +58,11 @@ public class NYCTLCIngestPlugin extends
 	private final static String DATE_FORMAT = "yyyy-MM-dd HH:mm:ss";
 	private final static String DATE_START_FORMAT = "yyyyMMdd";
 
-	private final SimpleFeatureType pointType;
-	private final SimpleFeatureBuilder pointBuilder;
-	private final ByteArrayId pointKey;
+	private SimpleFeatureType pointType;
+	private SimpleFeatureBuilder pointBuilder;
+	private ByteArrayId pointKey;
 	private boolean dropoff = false;
+	private boolean timerange = false;
 
 	public NYCTLCIngestPlugin() {
 		this(
@@ -73,7 +75,16 @@ public class NYCTLCIngestPlugin extends
 		if (options != null) {
 			dropoff = options.isDropoff();
 		}
-		pointType = NYCTLCUtils.createPointDataType(dropoff);
+		if (options != null) {
+			timerange = options.isTimerange();
+		}
+		initType();
+	}
+
+	private void initType() {
+		pointType = NYCTLCUtils.createPointDataType(
+				dropoff,
+				timerange);
 		pointBuilder = new SimpleFeatureBuilder(
 				pointType);
 		pointKey = new ByteArrayId(
@@ -93,7 +104,7 @@ public class NYCTLCIngestPlugin extends
 	@Override
 	protected SimpleFeatureType[] getTypes() {
 
-		if (dropoff == true) {
+		if (dropoff) {
 			System.out.println("Using Drop-Off points");
 		}
 		else {
@@ -102,7 +113,9 @@ public class NYCTLCIngestPlugin extends
 
 		return new SimpleFeatureType[] {
 
-			NYCTLCUtils.createPointDataType(dropoff)
+			NYCTLCUtils.createPointDataType(
+					dropoff,
+					timerange)
 		};
 	}
 
@@ -582,6 +595,30 @@ public class NYCTLCIngestPlugin extends
 			IOUtils.closeQuietly(fr);
 		}
 		return pts.toArray(new NYCTLCEntry[pts.size()]);
+	}
+
+	@Override
+	public byte[] toBinary() {
+		byte[] parentBytes = super.toBinary();
+		ByteBuffer buf = ByteBuffer.allocate(parentBytes.length + 6);
+		buf.putInt(parentBytes.length);
+		buf.put(parentBytes);
+		buf.put(dropoff ? (byte) 1 : (byte) 0);
+		buf.put(timerange ? (byte) 1 : (byte) 0);
+		return buf.array();
+	}
+
+	@Override
+	public void fromBinary(
+			byte[] bytes ) {
+		ByteBuffer buf = ByteBuffer.wrap(bytes);
+		int length = buf.getInt();
+		byte[] dst = new byte[length];
+		buf.get(dst);
+		dropoff = buf.get() == 1;
+		timerange = buf.get() == 1;
+		super.fromBinary(dst);
+		initType();
 	}
 
 	@Override

@@ -33,12 +33,6 @@ public class NYCTLCUtils
 				Field.PICKUP_LATITUDE,
 				Field.PICKUP_DATETIME,
 				Field.DROPOFF_DATETIME,
-				Field.FARE_AMOUNT,
-				Field.PASSENGER_COUNT,
-				Field.TIP_AMOUNT,
-				Field.TOLLS_AMOUNT,
-				Field.TOTAL_AMOUNT,
-				Field.TRIP_DISTANCE,
 			})));
 
 	public enum Field {
@@ -306,7 +300,8 @@ public class NYCTLCUtils
 	}
 
 	public static SimpleFeatureType createPointDataType(
-			Boolean dropoff ) {
+			boolean dropoff,
+			boolean timerange ) {
 		final SimpleFeatureTypeBuilder simpleFeatureTypeBuilder = new SimpleFeatureTypeBuilder();
 		final AttributeTypeBuilder attributeTypeBuilder = new AttributeTypeBuilder();
 
@@ -317,7 +312,7 @@ public class NYCTLCUtils
 					field.getIndexedName()));
 		}
 
-		if (dropoff == true) {
+		if (dropoff) {
 			simpleFeatureTypeBuilder.setName(NYCTLC_POINT_FEATURE_DROPOFF);
 
 			simpleFeatureTypeBuilder.set(
@@ -340,7 +335,14 @@ public class NYCTLCUtils
 		SimpleFeatureType type = simpleFeatureTypeBuilder.buildFeatureType();
 
 		TimeDescriptorConfiguration config = new TimeDescriptorConfiguration();
-		config.setTimeName(dropoff ? Field.DROPOFF_DATETIME.getIndexedName() : Field.PICKUP_DATETIME.getIndexedName());
+		if (timerange) {
+			config.setStartRangeName(Field.PICKUP_DATETIME.getIndexedName());
+			config.setEndRangeName(Field.DROPOFF_DATETIME.getIndexedName());
+		}
+		else {
+			config.setTimeName(dropoff ? Field.DROPOFF_DATETIME.getIndexedName() : Field.PICKUP_DATETIME
+					.getIndexedName());
+		}
 		config.updateType(type);
 		return type;
 	}

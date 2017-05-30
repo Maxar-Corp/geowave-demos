@@ -94,7 +94,7 @@ public class CalculateStats
 				(ClassTag) scala.reflect.ClassTag$.MODULE$.apply(GeoWaveInputKey.class),
 				(ClassTag) scala.reflect.ClassTag$.MODULE$.apply(SimpleFeature.class));
 
-		final Map<String, String> optionsMap = inputStoreOptions.getFactoryOptionsAsMap();
+		final Map<String, String> optionsMap = inputStoreOptions.getOptionsAsMap();
 		optionsMap.put(
 				GeoWaveStoreFinder.STORE_HINT_OPTION.getName(),
 				inputStoreOptions.getType());

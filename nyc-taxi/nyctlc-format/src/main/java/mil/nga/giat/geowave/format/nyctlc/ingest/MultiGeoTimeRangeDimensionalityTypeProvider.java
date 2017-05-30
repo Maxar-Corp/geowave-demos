@@ -12,6 +12,7 @@ import com.beust.jcommander.ParameterException;
 import mil.nga.giat.geowave.core.geotime.index.dimension.LatitudeDefinition;
 import mil.nga.giat.geowave.core.geotime.index.dimension.LongitudeDefinition;
 import mil.nga.giat.geowave.core.geotime.index.dimension.TimeDefinition;
+import mil.nga.giat.geowave.core.geotime.index.dimension.TemporalBinningStrategy.Unit;
 import mil.nga.giat.geowave.core.geotime.store.dimension.GeometryWrapper;
 import mil.nga.giat.geowave.core.geotime.store.dimension.LatitudeField;
 import mil.nga.giat.geowave.core.geotime.store.dimension.LongitudeField;
@@ -38,9 +39,8 @@ import mil.nga.giat.geowave.core.store.index.PrimaryIndex;
 import mil.nga.giat.geowave.core.store.spi.DimensionalityTypeOptions;
 import mil.nga.giat.geowave.core.store.spi.DimensionalityTypeProviderSpi;
 import mil.nga.giat.geowave.format.nyctlc.NYCTLCUtils;
-import mil.nga.giat.geowave.format.nyctlc.adapter.TimeOfDay;
 
-public class NYCTLCDimensionalityTypeProvider implements
+public class MultiGeoTimeRangeDimensionalityTypeProvider implements
 		DimensionalityTypeProviderSpi
 {
 	private final NYCTLCOptions options = new NYCTLCOptions();
@@ -71,20 +71,11 @@ public class NYCTLCDimensionalityTypeProvider implements
 						0
 					}));
 
-	public final static ByteArrayId TIME_OF_DAY_SEC_FIELD_ID = new ByteArrayId(
-			ByteArrayUtils.combineArrays(
-					mil.nga.giat.geowave.core.index.StringUtils.stringToBinary(NYCTLCUtils.Field.TIME_OF_DAY_SEC
-							.getIndexedName()),
-					new byte[] {
-						0,
-						0
-					}));
-
-	public NYCTLCDimensionalityTypeProvider() {}
+	public MultiGeoTimeRangeDimensionalityTypeProvider() {}
 
 	@Override
 	public String getDimensionalityTypeName() {
-		return "nyctlc_sst";
+		return "multigeo-timerange";
 	}
 
 	@Override
@@ -123,9 +114,8 @@ public class NYCTLCDimensionalityTypeProvider implements
 			new LatitudeField(
 					true,
 					DROPOFF_GEOMETRY_FIELD_ID),
-			new TimeOfDayField(
-					new TimeOfDayDefinition(),
-					TIME_OF_DAY_SEC_FIELD_ID)
+			new TimeField(
+					Unit.YEAR)
 		};
 
 		final NumericDimensionDefinition[] dimensions = new NumericDimensionDefinition[] {
@@ -135,7 +125,8 @@ public class NYCTLCDimensionalityTypeProvider implements
 			new DropoffLongitudeDefinition(),
 			new DropoffLatitudeDefinition(
 					true),
-			new TimeOfDayDefinition()
+			new TimeDefinition(
+					Unit.YEAR)
 		};
 
 		final String combinedId = DEFAULT_NYCTLC_ID_STR + "_" + options.bias;
@@ -385,194 +376,6 @@ public class NYCTLCDimensionalityTypeProvider implements
 					x,
 					MIN_LAT,
 					MAX_LAT);
-		}
-	}
-
-	public static class TimeOfDayField implements
-			NumericDimensionField<TimeOfDay>
-	{
-		private TimeOfDayDefinition base;
-		private ByteArrayId fieldId;
-
-		public TimeOfDayField() {
-			super();
-		}
-
-		public TimeOfDayField(
-				TimeOfDayDefinition base,
-				ByteArrayId fieldId ) {
-			super();
-			this.base = base;
-			this.fieldId = fieldId;
-		}
-
-		public ByteArrayId getFieldId() {
-			return fieldId;
-		}
-
-		public double normalize(
-				double value ) {
-			return base.normalize(value);
-		}
-
-		public BinRange[] getNormalizedRanges(
-				NumericData range ) {
-			return base.getNormalizedRanges(range);
-		}
-
-		public NumericData getFullRange() {
-			return base.getFullRange();
-		}
-
-		public double denormalize(
-				double value ) {
-			return base.denormalize(value);
-		}
-
-		public NumericRange getDenormalizedRange(
-				BinRange range ) {
-			return base.getDenormalizedRange(range);
-		}
-
-		public int getFixedBinIdSize() {
-			return base.getFixedBinIdSize();
-		}
-
-		public double getRange() {
-			return base.getRange();
-		}
-
-		public NumericRange getBounds() {
-			return base.getBounds();
-		}
-
-		@Override
-		public byte[] toBinary() {
-			final byte[] dimensionBinary = PersistenceUtils.toBinary(base);
-			final ByteBuffer buf = ByteBuffer.allocate(dimensionBinary.length + fieldId.getBytes().length + 4);
-			buf.putInt(fieldId.getBytes().length);
-			buf.put(fieldId.getBytes());
-			buf.put(dimensionBinary);
-			return buf.array();
-		}
-
-		@Override
-		public void fromBinary(
-				final byte[] bytes ) {
-			final ByteBuffer buf = ByteBuffer.wrap(bytes);
-			final int fieldIdLength = buf.getInt();
-			final byte[] fieldIdBinary = new byte[fieldIdLength];
-			buf.get(fieldIdBinary);
-			fieldId = new ByteArrayId(
-					fieldIdBinary);
-
-			final byte[] dimensionBinary = new byte[bytes.length - fieldIdLength - 4];
-			buf.get(dimensionBinary);
-			base = PersistenceUtils.fromBinary(
-					dimensionBinary,
-					TimeOfDayDefinition.class);
-		}
-
-		@Override
-		public int hashCode() {
-			final int prime = 31;
-			int result = 1;
-			result = (prime * result) + ((base == null) ? 0 : base.hashCode());
-			result = (prime * result) + ((fieldId == null) ? 0 : fieldId.hashCode());
-			return result;
-		}
-
-		@Override
-		public boolean equals(
-				final Object obj ) {
-			if (this == obj) {
-				return true;
-			}
-			if (obj == null) {
-				return false;
-			}
-			if (getClass() != obj.getClass()) {
-				return false;
-			}
-			final TimeOfDayField other = (TimeOfDayField) obj;
-			if (base == null) {
-				if (other.base != null) {
-					return false;
-				}
-			}
-			else if (!base.equals(other.base)) {
-				return false;
-			}
-			if (fieldId == null) {
-				if (other.fieldId != null) {
-					return false;
-				}
-			}
-			else if (!fieldId.equals(other.fieldId)) {
-				return false;
-			}
-			return true;
-		}
-
-		@Override
-		public NumericData getNumericData(
-				TimeOfDay dataElement ) {
-			return new NumericValue(
-					dataElement.getTimeSeconds());
-		}
-
-		@Override
-		public FieldWriter<?, TimeOfDay> getWriter() {
-			return new FieldWriter<Object, TimeOfDay>() {
-
-				@Override
-				public byte[] getVisibility(
-						Object rowValue,
-						ByteArrayId fieldId,
-						TimeOfDay fieldValue ) {
-					return fieldValue.getVisibility();
-				}
-
-				@Override
-				public byte[] writeField(
-						TimeOfDay fieldValue ) {
-					ByteBuffer buf = ByteBuffer.allocate(4);
-					buf.putInt(fieldValue.getTimeSeconds());
-					return buf.array();
-				}
-			};
-		}
-
-		@Override
-		public FieldReader<TimeOfDay> getReader() {
-			return new FieldReader<TimeOfDay>() {
-
-				@Override
-				public TimeOfDay readField(
-						byte[] fieldData ) {
-					ByteBuffer buf = ByteBuffer.wrap(fieldData);
-					return new TimeOfDay(
-							buf.getInt(),
-							new byte[] {});
-
-				}
-			};
-		}
-
-		@Override
-		public NumericDimensionDefinition getBaseDefinition() {
-			return base;
-		}
-	}
-
-	public static class TimeOfDayDefinition extends
-			BasicDimensionDefinition
-	{
-		public TimeOfDayDefinition() {
-			super(
-					0,
-					new Long(
-							TimeUnit.DAYS.toSeconds(1)).doubleValue());
 		}
 	}
 }

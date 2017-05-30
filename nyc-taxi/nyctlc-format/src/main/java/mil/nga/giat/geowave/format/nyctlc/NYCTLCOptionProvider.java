@@ -9,10 +9,16 @@ public class NYCTLCOptionProvider implements
 {
 	@Parameter(names = "--dropoff", required = false)
 	private boolean dropoff = false;
+	@Parameter(names = "--timerange", required = false)
+	private boolean timerange = false;
 
 	public NYCTLCOptionProvider() {}
 
 	public boolean isDropoff() {
 		return dropoff;
+	}
+
+	public boolean isTimerange() {
+		return timerange;
 	}
 }

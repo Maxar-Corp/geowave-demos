@@ -1,12 +1,24 @@
 package mil.nga.giat.geowave.format.nyctlc.query;
 
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+
+import org.apache.log4j.Logger;
+
 import com.vividsolutions.jts.geom.Envelope;
 import com.vividsolutions.jts.geom.Geometry;
 import com.vividsolutions.jts.io.ParseException;
 import com.vividsolutions.jts.io.WKBReader;
 import com.vividsolutions.jts.io.WKBWriter;
+
+import mil.nga.giat.geowave.core.geotime.index.dimension.TimeDefinition;
 import mil.nga.giat.geowave.core.geotime.store.filter.SpatialQueryFilter;
-import mil.nga.giat.geowave.core.index.dimension.BasicDimensionDefinition;
 import mil.nga.giat.geowave.core.index.dimension.NumericDimensionDefinition;
 import mil.nga.giat.geowave.core.index.sfc.data.BasicNumericDataset;
 import mil.nga.giat.geowave.core.index.sfc.data.MultiDimensionalNumericData;
@@ -16,40 +28,33 @@ import mil.nga.giat.geowave.core.store.dimension.NumericDimensionField;
 import mil.nga.giat.geowave.core.store.filter.DistributableFilterList;
 import mil.nga.giat.geowave.core.store.filter.DistributableQueryFilter;
 import mil.nga.giat.geowave.core.store.query.BasicQuery;
+import mil.nga.giat.geowave.core.store.query.BasicQuery.ConstraintData;
+import mil.nga.giat.geowave.core.store.query.BasicQuery.ConstraintSet;
+import mil.nga.giat.geowave.core.store.query.BasicQuery.Constraints;
 import mil.nga.giat.geowave.format.nyctlc.ingest.NYCTLCDimensionalityTypeProvider;
-import mil.nga.giat.geowave.format.nyctlc.ingest.NYCTLCDimensionalityTypeProvider.TimeOfDayDefinition;
+import mil.nga.giat.geowave.format.nyctlc.ingest.MultiGeoMultiTimeDimensionalityTypeProvider.DropoffTimeDefinition;
+import mil.nga.giat.geowave.format.nyctlc.ingest.MultiGeoMultiTimeDimensionalityTypeProvider.PickupTimeDefinition;
 
-import org.apache.log4j.Logger;
-
-import java.nio.ByteBuffer;
-import java.util.*;
-
-/**
- * Created by geowave on 4/28/16.
- */
-public class NYCTLCQuery extends
+public class MultiGeoTimeRangeQuery extends
 		BasicQuery
 {
 
-	private final static Logger LOGGER = Logger.getLogger(NYCTLCQuery.class);
+	private final static Logger LOGGER = Logger.getLogger(MultiGeoMultiTimestampQuery.class);
 	private Geometry pickupGeometry;
 	private Geometry dropoffGeometry;
 	SpatialQueryFilter.CompareOperation compareOp = SpatialQueryFilter.CompareOperation.OVERLAPS;
 
-	protected NYCTLCQuery() {}
+	protected MultiGeoTimeRangeQuery() {}
 
-	public NYCTLCQuery(
-			final int startTime,
-			final int endTime,
+	public MultiGeoTimeRangeQuery(
+			final Date startTime,
+			final Date endTime,
 			final Geometry pickupGeometry,
 			final Geometry dropoffGeometry ) {
 		super(
 				createNYCTLCConstraints(
-						new ConstraintData(
-								new NumericRange(
-										startTime,
-										endTime),
-								false),
+						startTime,
+						endTime,
 						pickupGeometry,
 						dropoffGeometry));
 		this.pickupGeometry = pickupGeometry;
@@ -123,20 +128,26 @@ public class NYCTLCQuery extends
 	}
 
 	private static Constraints createNYCTLCConstraints(
-			final ConstraintData constraintData,
+			final Date startTime,
+			final Date endTime,
 			final Geometry pickupGeometry,
 			final Geometry dropoffGeometry ) {
 
-		final ConstraintSet cs1 = new ConstraintSet();
-		cs1.addConstraint(
-				TimeOfDayDefinition.class,
-				constraintData);
+		Constraints timeConstraints = new Constraints(
+				new ConstraintSet(
+						TimeDefinition.class,
+						new ConstraintData(
+								new NumericRange(
+										startTime.getTime(),
+										endTime.getTime()),
+								false)));
 
 		final Constraints geoConstraints = basicConstraintsFromGeometry(
 				pickupGeometry,
 				dropoffGeometry);
-		return geoConstraints.merge(new Constraints(
-				cs1));
+		return geoConstraints.merge(
+				timeConstraints).merge(
+				timeConstraints);
 	}
 
 	public static BasicQuery.Constraints basicConstraintsFromGeometry(

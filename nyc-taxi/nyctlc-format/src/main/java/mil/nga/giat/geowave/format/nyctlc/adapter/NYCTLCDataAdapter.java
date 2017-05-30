@@ -12,6 +12,7 @@ import mil.nga.giat.geowave.core.store.data.field.FieldVisibilityHandler;
 import mil.nga.giat.geowave.core.store.data.visibility.VisibilityManagement;
 import mil.nga.giat.geowave.core.store.index.CommonIndexValue;
 import mil.nga.giat.geowave.format.nyctlc.NYCTLCUtils;
+import mil.nga.giat.geowave.format.nyctlc.ingest.MultiGeoMultiTimeDimensionalityTypeProvider;
 import mil.nga.giat.geowave.format.nyctlc.ingest.NYCTLCDimensionalityTypeProvider;
 import org.opengis.feature.simple.SimpleFeature;
 import org.opengis.feature.simple.SimpleFeatureType;
@@ -105,6 +106,26 @@ public class NYCTLCDataAdapter extends
 								dropoffLonDescriptor.getLocalName(),
 								fieldVisiblityHandler,
 								config.getAttributeName())));
+		final AttributeDescriptor pickupTimeDescriptor = type.getDescriptor(NYCTLCUtils.Field.PICKUP_DATETIME
+				.getIndexedName());
+		dimensionMatchingFieldHandlers.put(
+				MultiGeoMultiTimeDimensionalityTypeProvider.PICKUP_TIME_FIELD_ID,
+				new FeatureTimestampHandler(
+						pickupTimeDescriptor,
+						config.getManager().createVisibilityHandler(
+								pickupTimeDescriptor.getLocalName(),
+								fieldVisiblityHandler,
+								config.getAttributeName())));
+		final AttributeDescriptor dropoffTimeDescriptor = type.getDescriptor(NYCTLCUtils.Field.DROPOFF_DATETIME
+				.getIndexedName());
+		dimensionMatchingFieldHandlers.put(
+				MultiGeoMultiTimeDimensionalityTypeProvider.DROPOFF_TIME_FIELD_ID,
+				new FeatureTimestampHandler(
+						dropoffTimeDescriptor,
+						config.getManager().createVisibilityHandler(
+								dropoffTimeDescriptor.getLocalName(),
+								fieldVisiblityHandler,
+								config.getAttributeName())));
 
 		final AttributeDescriptor timeOfDayDescriptor = type.getDescriptor(NYCTLCUtils.Field.TIME_OF_DAY_SEC
 				.getIndexedName());
@@ -116,5 +137,12 @@ public class NYCTLCDataAdapter extends
 								timeOfDayDescriptor.getLocalName(),
 								fieldVisiblityHandler,
 								config.getAttributeName())));
+	}
+
+	@Override
+	protected IndexFieldHandler<SimpleFeature, Time, Object> getTimeRangeHandler(
+			SimpleFeatureType featureType ) {
+		// TODO Auto-generated method stub
+		return super.getTimeRangeHandler(featureType);
 	}
 }
