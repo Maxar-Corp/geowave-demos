@@ -1,5 +1,8 @@
 package mil.nga.giat.geowave.format.nyctlc.ingest;
 
+import java.nio.ByteBuffer;
+import java.util.concurrent.TimeUnit;
+
 import org.apache.commons.lang3.StringUtils;
 
 import com.beust.jcommander.IStringConverter;
@@ -8,8 +11,8 @@ import com.beust.jcommander.ParameterException;
 
 import mil.nga.giat.geowave.core.geotime.index.dimension.LatitudeDefinition;
 import mil.nga.giat.geowave.core.geotime.index.dimension.LongitudeDefinition;
-import mil.nga.giat.geowave.core.geotime.index.dimension.TemporalBinningStrategy.Unit;
 import mil.nga.giat.geowave.core.geotime.index.dimension.TimeDefinition;
+import mil.nga.giat.geowave.core.geotime.index.dimension.TemporalBinningStrategy.Unit;
 import mil.nga.giat.geowave.core.geotime.store.dimension.GeometryWrapper;
 import mil.nga.giat.geowave.core.geotime.store.dimension.LatitudeField;
 import mil.nga.giat.geowave.core.geotime.store.dimension.LongitudeField;
@@ -17,11 +20,18 @@ import mil.nga.giat.geowave.core.geotime.store.dimension.Time;
 import mil.nga.giat.geowave.core.geotime.store.dimension.TimeField;
 import mil.nga.giat.geowave.core.index.ByteArrayId;
 import mil.nga.giat.geowave.core.index.ByteArrayUtils;
+import mil.nga.giat.geowave.core.index.PersistenceUtils;
+import mil.nga.giat.geowave.core.index.dimension.BasicDimensionDefinition;
 import mil.nga.giat.geowave.core.index.dimension.NumericDimensionDefinition;
 import mil.nga.giat.geowave.core.index.dimension.bin.BinRange;
 import mil.nga.giat.geowave.core.index.sfc.SFCFactory;
 import mil.nga.giat.geowave.core.index.sfc.data.NumericData;
+import mil.nga.giat.geowave.core.index.sfc.data.NumericRange;
+import mil.nga.giat.geowave.core.index.sfc.data.NumericValue;
 import mil.nga.giat.geowave.core.index.sfc.tiered.TieredSFCIndexFactory;
+import mil.nga.giat.geowave.core.index.sfc.xz.XZHierarchicalIndexFactory;
+import mil.nga.giat.geowave.core.store.data.field.FieldReader;
+import mil.nga.giat.geowave.core.store.data.field.FieldWriter;
 import mil.nga.giat.geowave.core.store.dimension.NumericDimensionField;
 import mil.nga.giat.geowave.core.store.index.BasicIndexModel;
 import mil.nga.giat.geowave.core.store.index.CommonIndexValue;
@@ -35,7 +45,7 @@ import mil.nga.giat.geowave.format.nyctlc.ingest.NYCTLCDimensionalityTypeProvide
 import mil.nga.giat.geowave.format.nyctlc.ingest.NYCTLCDimensionalityTypeProvider.PickupLatitudeDefinition;
 import mil.nga.giat.geowave.format.nyctlc.ingest.NYCTLCDimensionalityTypeProvider.PickupLongitudeDefinition;
 
-public class MultiGeoMultiTimeDimensionalityTypeProvider implements
+public class MultiGeoTimeRangeXZOrderDimensionalityTypeProvider implements
 		DimensionalityTypeProviderSpi
 {
 	private final NYCTLCOptions options = new NYCTLCOptions();
@@ -65,29 +75,12 @@ public class MultiGeoMultiTimeDimensionalityTypeProvider implements
 						0,
 						0
 					}));
-	public final static ByteArrayId PICKUP_TIME_FIELD_ID = new ByteArrayId(
-			ByteArrayUtils.combineArrays(
-					mil.nga.giat.geowave.core.index.StringUtils.stringToBinary(NYCTLCUtils.Field.PICKUP_DATETIME
-							.getIndexedName()),
-					new byte[] {
-						0,
-						0
-					}));
 
-	public final static ByteArrayId DROPOFF_TIME_FIELD_ID = new ByteArrayId(
-			ByteArrayUtils.combineArrays(
-					mil.nga.giat.geowave.core.index.StringUtils.stringToBinary(NYCTLCUtils.Field.DROPOFF_DATETIME
-							.getIndexedName()),
-					new byte[] {
-						0,
-						0
-					}));
-
-	public MultiGeoMultiTimeDimensionalityTypeProvider() {}
+	public MultiGeoTimeRangeXZOrderDimensionalityTypeProvider() {}
 
 	@Override
 	public String getDimensionalityTypeName() {
-		return "multigeo-multitime";
+		return "multigeo-timerange-xz";
 	}
 
 	@Override
@@ -131,11 +124,7 @@ public class MultiGeoMultiTimeDimensionalityTypeProvider implements
 							true),
 					DROPOFF_GEOMETRY_FIELD_ID),
 			new TimeField(
-					new PickupTimeDefinition(),
-					PICKUP_TIME_FIELD_ID),
-			new TimeField(
-					new DropoffTimeDefinition(),
-					DROPOFF_TIME_FIELD_ID)
+					Unit.YEAR)
 		};
 
 		final NumericDimensionDefinition[] dimensions = new NumericDimensionDefinition[] {
@@ -145,40 +134,21 @@ public class MultiGeoMultiTimeDimensionalityTypeProvider implements
 			new DropoffLongitudeDefinition(),
 			new DropoffLatitudeDefinition(
 					true),
-			new PickupTimeDefinition(),
-			new DropoffTimeDefinition()
+			new TimeDefinition(
+					Unit.YEAR)
 		};
 
 		final String combinedId = DEFAULT_NYCTLC_ID_STR + "_" + options.bias;
 
 		return new CustomIdIndex(
-				TieredSFCIndexFactory.createDefinedPrecisionTieredStrategy(
+				XZHierarchicalIndexFactory.createFullIncrementalTieredStrategy(
 						dimensions,
-						new int[][] {
-							new int[] {
-								0,
-								10
-							},
-							new int[] {
-								0,
-								10
-							},
-							new int[] {
-								0,
-								10
-							},
-							new int[] {
-								0,
-								10
-							},
-							new int[] {
-								0,
-								10
-							},
-							new int[] {
-								0,
-								10
-							}
+						new int[] {
+							options.bias.getSpatialPrecision(),
+							options.bias.getSpatialPrecision(),
+							options.bias.getSpatialPrecision(),
+							options.bias.getSpatialPrecision(),
+							options.bias.getTemporalPrecision()
 						},
 						SFCFactory.SFCType.HILBERT),
 				new BasicIndexModel(
@@ -289,24 +259,6 @@ public class MultiGeoMultiTimeDimensionalityTypeProvider implements
 
 		public PrimaryIndex createIndex() {
 			return internalCreatePrimaryIndex(options);
-		}
-	}
-
-	public static class PickupTimeDefinition extends
-			TimeDefinition
-	{
-		public PickupTimeDefinition() {
-			super(
-					Unit.YEAR);
-		}
-	}
-
-	public static class DropoffTimeDefinition extends
-			TimeDefinition
-	{
-		public DropoffTimeDefinition() {
-			super(
-					Unit.YEAR);
 		}
 	}
 }

@@ -8,7 +8,7 @@ public class NYCTLCOptionProvider implements
 		IngestFormatOptionProvider
 {
 	@Parameter(names = "--dropoff", required = false)
-	private boolean dropoff = false;
+	public boolean dropoff = false;
 	@Parameter(names = "--timerange", required = false)
 	private boolean timerange = false;
 

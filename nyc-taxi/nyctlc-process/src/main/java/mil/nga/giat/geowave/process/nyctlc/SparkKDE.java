@@ -63,7 +63,6 @@ public class SparkKDE
 			inputStoreOptions = inputStoreLoader.getDataStorePlugin();
 		}
 
-		;
 		// Load the Indexes
 		final IndexLoader indexLoader = new IndexLoader(
 				args[1]);

@@ -17,10 +17,13 @@ import mil.nga.giat.geowave.core.index.sfc.data.NumericRange;
 import mil.nga.giat.geowave.core.store.dimension.NumericDimensionField;
 import mil.nga.giat.geowave.core.store.filter.DistributableFilterList;
 import mil.nga.giat.geowave.core.store.filter.DistributableQueryFilter;
+import mil.nga.giat.geowave.core.store.filter.QueryFilter;
+import mil.nga.giat.geowave.core.store.index.CommonIndexModel;
 import mil.nga.giat.geowave.core.store.query.BasicQuery;
 import mil.nga.giat.geowave.core.store.query.BasicQuery.ConstraintData;
 import mil.nga.giat.geowave.core.store.query.BasicQuery.ConstraintSet;
 import mil.nga.giat.geowave.core.store.query.BasicQuery.Constraints;
+import mil.nga.giat.geowave.format.nyctlc.ingest.MultiGeoMultiTimeDimensionalityTypeProvider;
 import mil.nga.giat.geowave.format.nyctlc.ingest.MultiGeoMultiTimeDimensionalityTypeProvider.DropoffTimeDefinition;
 import mil.nga.giat.geowave.format.nyctlc.ingest.MultiGeoMultiTimeDimensionalityTypeProvider.PickupTimeDefinition;
 import mil.nga.giat.geowave.format.nyctlc.ingest.NYCTLCDimensionalityTypeProvider;
@@ -46,14 +49,18 @@ public class MultiGeoMultiTimestampQuery extends
 	protected MultiGeoMultiTimestampQuery() {}
 
 	public MultiGeoMultiTimestampQuery(
-			final Date startTime,
-			final Date endTime,
+			final Date pickupStartTime,
+			final Date pickupEndTime,
+			final Date dropoffStartTime,
+			final Date dropoffEndTime,
 			final Geometry pickupGeometry,
 			final Geometry dropoffGeometry ) {
 		super(
 				createNYCTLCConstraints(
-						startTime,
-						endTime,
+						pickupStartTime,
+						pickupEndTime,
+						dropoffStartTime,
+						dropoffEndTime,
 						pickupGeometry,
 						dropoffGeometry));
 		this.pickupGeometry = pickupGeometry;
@@ -68,67 +75,11 @@ public class MultiGeoMultiTimestampQuery extends
 		return dropoffGeometry;
 	}
 
-	@Override
-	protected DistributableQueryFilter createQueryFilter(
-			final MultiDimensionalNumericData constraints,
-			final NumericDimensionField<?>[] dimensionFields,
-			final NumericDimensionField<?>[] UCdimensionFields ) {
-		final List<NumericData> pickupConstraints = new ArrayList<NumericData>();
-		final List<NumericData> dropoffConstraints = new ArrayList<NumericData>();
-		final List<NumericDimensionField> pickupDimFields = new ArrayList<NumericDimensionField>();
-		final List<NumericDimensionField> dropoffDimFields = new ArrayList<NumericDimensionField>();
-		final List<NumericDimensionField> UCpickupDimFields = new ArrayList<NumericDimensionField>();
-		final List<NumericDimensionField> UCdropoffDimFields = new ArrayList<NumericDimensionField>();
-
-		for (int dim = 0; dim < constraints.getDimensionCount() && dim < dimensionFields.length; dim++) {
-			if (!dimensionFields[dim].getFieldId().equals(
-					NYCTLCDimensionalityTypeProvider.DROPOFF_GEOMETRY_FIELD_ID)) {
-				pickupConstraints.add(constraints.getDataPerDimension()[dim]);
-				pickupDimFields.add(dimensionFields[dim]);
-			}
-			else if (!dimensionFields[dim].getFieldId().equals(
-					NYCTLCDimensionalityTypeProvider.PICKUP_GEOMETRY_FIELD_ID)) {
-				dropoffConstraints.add(constraints.getDataPerDimension()[dim]);
-				dropoffDimFields.add(dimensionFields[dim]);
-			}
-		}
-
-		for (int dim = 0; dim < UCdimensionFields.length; dim++) {
-			if (!UCdimensionFields[dim].getFieldId().equals(
-					NYCTLCDimensionalityTypeProvider.DROPOFF_GEOMETRY_FIELD_ID)) {
-				UCpickupDimFields.add(UCdimensionFields[dim]);
-			}
-			else if (!UCdimensionFields[dim].getFieldId().equals(
-					NYCTLCDimensionalityTypeProvider.PICKUP_GEOMETRY_FIELD_ID)) {
-				UCdropoffDimFields.add(UCdimensionFields[dim]);
-			}
-		}
-
-		return new DistributableFilterList(
-				true,
-				Arrays.asList(new DistributableQueryFilter[] {
-					new SpatialQueryFilter(
-							new BasicNumericDataset(
-									pickupConstraints.toArray(new NumericData[pickupConstraints.size()])),
-							pickupDimFields.toArray(new NumericDimensionField[pickupDimFields.size()]),
-							UCpickupDimFields.toArray(new NumericDimensionField[UCpickupDimFields.size()]),
-							pickupGeometry,
-							compareOp,
-							compareOp.getBaseCompareOp()),
-					new SpatialQueryFilter(
-							new BasicNumericDataset(
-									dropoffConstraints.toArray(new NumericData[dropoffConstraints.size()])),
-							dropoffDimFields.toArray(new NumericDimensionField[dropoffDimFields.size()]),
-							UCdropoffDimFields.toArray(new NumericDimensionField[UCdropoffDimFields.size()]),
-							dropoffGeometry,
-							compareOp,
-							compareOp.getBaseCompareOp())
-				}));
-	}
-
 	private static Constraints createNYCTLCConstraints(
-			final Date startTime,
-			final Date endTime,
+			final Date pickupStartTime,
+			final Date pickupEndTime,
+			final Date dropoffStartTime,
+			final Date dropoffEndTime,
 			final Geometry pickupGeometry,
 			final Geometry dropoffGeometry ) {
 
@@ -137,8 +88,8 @@ public class MultiGeoMultiTimestampQuery extends
 						PickupTimeDefinition.class,
 						new ConstraintData(
 								new NumericRange(
-										startTime.getTime(),
-										endTime.getTime()),
+										pickupStartTime.getTime(),
+										pickupEndTime.getTime()),
 								false)));
 
 		Constraints dropoffConstraints = new Constraints(
@@ -146,8 +97,8 @@ public class MultiGeoMultiTimestampQuery extends
 						DropoffTimeDefinition.class,
 						new ConstraintData(
 								new NumericRange(
-										startTime.getTime(),
-										endTime.getTime()),
+										dropoffStartTime.getTime(),
+										dropoffEndTime.getTime()),
 								false)));
 		final Constraints geoConstraints = basicConstraintsFromGeometry(
 				pickupGeometry,
@@ -155,6 +106,17 @@ public class MultiGeoMultiTimestampQuery extends
 		return geoConstraints.merge(
 				pickupConstraints).merge(
 				dropoffConstraints);
+	}
+
+	private static CommonIndexModel im = new MultiGeoMultiTimeDimensionalityTypeProvider()
+			.createPrimaryIndex()
+			.getIndexModel();
+
+	@Override
+	public List<QueryFilter> createFilters(
+			CommonIndexModel indexModel ) {
+
+		return super.createFilters(im);
 	}
 
 	public static BasicQuery.Constraints basicConstraintsFromGeometry(

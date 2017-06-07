@@ -39,6 +39,10 @@ import mil.nga.giat.geowave.core.store.index.PrimaryIndex;
 import mil.nga.giat.geowave.core.store.spi.DimensionalityTypeOptions;
 import mil.nga.giat.geowave.core.store.spi.DimensionalityTypeProviderSpi;
 import mil.nga.giat.geowave.format.nyctlc.NYCTLCUtils;
+import mil.nga.giat.geowave.format.nyctlc.ingest.NYCTLCDimensionalityTypeProvider.DropoffLatitudeDefinition;
+import mil.nga.giat.geowave.format.nyctlc.ingest.NYCTLCDimensionalityTypeProvider.DropoffLongitudeDefinition;
+import mil.nga.giat.geowave.format.nyctlc.ingest.NYCTLCDimensionalityTypeProvider.PickupLatitudeDefinition;
+import mil.nga.giat.geowave.format.nyctlc.ingest.NYCTLCDimensionalityTypeProvider.PickupLongitudeDefinition;
 
 public class MultiGeoTimeRangeDimensionalityTypeProvider implements
 		DimensionalityTypeProviderSpi
@@ -105,14 +109,18 @@ public class MultiGeoTimeRangeDimensionalityTypeProvider implements
 
 		final NumericDimensionField[] fields = new NumericDimensionField[] {
 			new LongitudeField(
+					new PickupLongitudeDefinition(),
 					PICKUP_GEOMETRY_FIELD_ID),
 			new LatitudeField(
-					true,
+					new PickupLatitudeDefinition(
+							true),
 					PICKUP_GEOMETRY_FIELD_ID),
 			new LongitudeField(
+					new DropoffLongitudeDefinition(),
 					DROPOFF_GEOMETRY_FIELD_ID),
 			new LatitudeField(
-					true,
+					new DropoffLatitudeDefinition(
+							true),
 					DROPOFF_GEOMETRY_FIELD_ID),
 			new TimeField(
 					Unit.YEAR)
@@ -265,117 +273,6 @@ public class MultiGeoTimeRangeDimensionalityTypeProvider implements
 
 		public PrimaryIndex createIndex() {
 			return internalCreatePrimaryIndex(options);
-		}
-	}
-
-	public static class PickupLongitudeDefinition extends
-			LongitudeDefinition
-	{
-		public PickupLongitudeDefinition() {
-			super();
-			min = MIN_LON;
-			max = MAX_LON;
-		}
-
-		@Override
-		public BinRange[] getNormalizedRanges(
-				final NumericData range ) {
-			return new BinRange[] {
-				new BinRange(
-						// by default clamp to the min and max
-						clamp(range.getMin()),
-						clamp(range.getMax()))
-			};
-		}
-	}
-
-	public static class PickupTimeDefinition extends
-			TimeDefinition
-	{
-		public PickupTimeDefinition() {
-			super();
-		}
-	}
-
-	public static class DropoffTimeDefinition extends
-			TimeDefinition
-	{
-		public DropoffTimeDefinition() {
-			super();
-		}
-	}
-
-	public static class PickupLatitudeDefinition extends
-			LatitudeDefinition
-	{
-		public PickupLatitudeDefinition() {
-			super();
-			min = MIN_LAT;
-			max = MAX_LAT;
-		}
-
-		public PickupLatitudeDefinition(
-				final boolean useHalfRange ) {
-			super(
-					useHalfRange);
-			min = MIN_LAT;
-			max = MAX_LAT;
-		}
-
-		@Override
-		protected double clamp(
-				final double x ) {
-			return clamp(
-					x,
-					MIN_LAT,
-					MAX_LAT);
-		}
-	}
-
-	public static class DropoffLongitudeDefinition extends
-			LongitudeDefinition
-	{
-		public DropoffLongitudeDefinition() {
-			super();
-			min = MIN_LON;
-			max = MAX_LON;
-		}
-
-		@Override
-		public BinRange[] getNormalizedRanges(
-				final NumericData range ) {
-			return new BinRange[] {
-				new BinRange(
-						// by default clamp to the min and max
-						clamp(range.getMin()),
-						clamp(range.getMax()))
-			};
-		}
-	}
-
-	public static class DropoffLatitudeDefinition extends
-			LatitudeDefinition
-	{
-		public DropoffLatitudeDefinition() {
-			min = MIN_LAT;
-			max = MAX_LAT;
-		}
-
-		public DropoffLatitudeDefinition(
-				final boolean useHalfRange ) {
-			super(
-					useHalfRange);
-			min = MIN_LAT;
-			max = MAX_LAT;
-		}
-
-		@Override
-		protected double clamp(
-				final double x ) {
-			return clamp(
-					x,
-					MIN_LAT,
-					MAX_LAT);
 		}
 	}
 }

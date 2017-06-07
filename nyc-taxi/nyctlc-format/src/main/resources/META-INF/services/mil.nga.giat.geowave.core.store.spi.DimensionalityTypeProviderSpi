@@ -1,3 +1,4 @@
 mil.nga.giat.geowave.format.nyctlc.ingest.NYCTLCDimensionalityTypeProvider
 mil.nga.giat.geowave.format.nyctlc.ingest.MultiGeoMultiTimeDimensionalityTypeProvider
 mil.nga.giat.geowave.format.nyctlc.ingest.MultiGeoTimeRangeDimensionalityTypeProvider
+mil.nga.giat.geowave.format.nyctlc.ingest.MultiGeoTimeRangeXZOrderDimensionalityTypeProvider
