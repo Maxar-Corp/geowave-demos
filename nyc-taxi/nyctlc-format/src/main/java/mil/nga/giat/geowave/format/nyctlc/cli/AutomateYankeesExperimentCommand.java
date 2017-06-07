@@ -8,6 +8,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Set;
 import java.util.TimeZone;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.cli.ParseException;
 import org.apache.log4j.Logger;
@@ -340,7 +341,6 @@ public class AutomateYankeesExperimentCommand extends
 								+ CQL_DATE_FORMAT.format(dEnd) + "' AND \""
 								+ NYCTLCUtils.Field.DROPOFF_DATETIME.getIndexedName() + "\" >= '"
 								+ CQL_DATE_FORMAT.format(dStart) + "'";
-						System.err.println(cqlPredicate);
 						try {
 							query = CQLQuery.createOptimalQuery(
 									cqlPredicate,
@@ -351,15 +351,24 @@ public class AutomateYankeesExperimentCommand extends
 							ex.printStackTrace();
 						}
 					}
-					stopWatch.start();
-					final long results = runQuery(
-							adapter,
-							adapter.getAdapterId(),
-							index,
-							dataStore,
-							query);
-					stopWatch.stop();
-					System.out.println("Got " + results + " results in " + stopWatch.toString());
+					double[] data = new double[samples];
+					long results = 0;
+					for (int i = 0; i < samples; i++) {
+						stopWatch.start();
+						results = runQuery(
+								adapter,
+								adapter.getAdapterId(),
+								index,
+								dataStore,
+								query);
+						stopWatch.stop();
+						data[i] = stopWatch.elapsed(TimeUnit.MILLISECONDS);
+					}
+					new Statistics(
+							data,
+							results,
+							storeName,
+							e.experimentName).printStats();
 				}
 				catch (final IOException ex) {
 					LOGGER.warn(

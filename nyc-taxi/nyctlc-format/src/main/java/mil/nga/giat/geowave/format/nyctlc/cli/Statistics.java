@@ -63,7 +63,7 @@ public class Statistics
 
 	public String toCSVRow() {
 		return String.format(
-				"%s,%s,%s,%s,%s",
+				"%s,%s,%s,%s,%s,%s",
 				entryCount,
 				getMean(),
 				median(),
