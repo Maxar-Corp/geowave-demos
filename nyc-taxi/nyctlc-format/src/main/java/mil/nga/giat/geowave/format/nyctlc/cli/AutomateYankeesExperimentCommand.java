@@ -259,7 +259,7 @@ public class AutomateYankeesExperimentCommand extends
 			final OperationParams params )
 			throws ParseException {
 		final Stopwatch stopWatch = new Stopwatch();
-
+		System.out.println(Statistics.getCSVHeader());
 		// Ensure we have all the required arguments
 		if (parameters.size() < 1) {
 			throw new ParameterException(
@@ -293,12 +293,6 @@ public class AutomateYankeesExperimentCommand extends
 					final CloseableIterator<DataAdapter<?>> it = adapterStore.getAdapters();
 					adapter = (GeotoolsFeatureDataAdapter) it.next();
 					it.close();
-					if (storeName.contains("dropoff")) {
-						NYCTLCOptionProvider o = new NYCTLCOptionProvider();
-						o.dropoff = true;
-						adapter = (GeotoolsFeatureDataAdapter) new NYCTLCIngestPlugin(
-								o).getDataAdapters(null)[0];
-					}
 					try {
 						getBoxGeom(
 								e,
@@ -363,6 +357,7 @@ public class AutomateYankeesExperimentCommand extends
 								query);
 						stopWatch.stop();
 						data[i] = stopWatch.elapsed(TimeUnit.MILLISECONDS);
+						stopWatch.reset();
 					}
 					new Statistics(
 							data,
@@ -385,7 +380,6 @@ public class AutomateYankeesExperimentCommand extends
 			final PrimaryIndex index,
 			final DataStore dataStore,
 			Query query ) {
-		final Stopwatch stopWatch = new Stopwatch();
 
 		long count = 0;
 		if (useAggregation) {
@@ -411,7 +405,6 @@ public class AutomateYankeesExperimentCommand extends
 			}
 		}
 		else {
-			stopWatch.start();
 
 			final CloseableIterator<Object> it = dataStore.query(
 					new QueryOptions(
@@ -419,19 +412,10 @@ public class AutomateYankeesExperimentCommand extends
 							index.getId()),
 					query);
 
-			stopWatch.stop();
-			System.out.println("Ran 6-dimensional query in " + stopWatch.toString());
-
-			stopWatch.reset();
-			stopWatch.start();
-
 			while (it.hasNext()) {
 				it.next();
 				count++;
 			}
-
-			stopWatch.stop();
-			System.out.println("BBOX query results iteration took " + stopWatch.toString());
 		}
 		return count;
 	}

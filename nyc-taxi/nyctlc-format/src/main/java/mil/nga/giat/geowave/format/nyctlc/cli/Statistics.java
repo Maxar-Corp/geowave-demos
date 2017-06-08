@@ -19,6 +19,7 @@ public class Statistics
 		this.entryCount = entryCount;
 		size = data.length;
 		this.storeName = storeName;
+		this.queryName = queryName;
 	}
 
 	double getMean() {
